@@ -3,15 +3,16 @@ entity_map.md (graph + attribute tables + placeholder registry) and
 entity_glossary.md (prose glossary: hand-written conventions preamble +
 per-entity definitions from the map).
 
-Source of truth: entity_map.yaml — the ONLY entry channel for entity/term
-changes, including definitions. glossary_preamble.md holds cross-cutting
-conventions prose (a disjoint domain: no entity entries live there).
-This script is the only writer of both generated views — never edit them
-by hand; entity_map_check.py detects stale or hand-edited views.
+Source of truth: entity_map.yaml — the ONLY hand-written file of the system
+and the ONLY entry channel for entity/term changes: entities, attributes,
+relations, definitions AND the cross-cutting conventions prose (top-level
+`conventions` block). This script is the only writer of both generated
+views — never edit them by hand; entity_map_check.py detects stale or
+hand-edited views.
 
 Checks: duplicate ids, dangling relation endpoints, isolated entities,
 placeholders without a decision trigger, unknown groups/statuses,
-entities without a definition.
+entities without a definition, missing conventions block.
 
 Run: .venv/bin/python docs/system_design/design_truth/entity_map_build.py
 """
@@ -25,7 +26,6 @@ import yaml
 
 HERE = Path(__file__).parent
 SOURCE = HERE / "entity_map.yaml"
-PREAMBLE = HERE / "glossary_preamble.md"
 MAP_VIEW = HERE / "entity_map.md"
 GLOSSARY_VIEW = HERE / "entity_glossary.md"
 
@@ -42,6 +42,9 @@ def validate(data: dict) -> list[str]:
     groups = data.get("groups", {})
     entities = data.get("entities", [])
     relations = data.get("relations", [])
+
+    if not str(data.get("conventions", "")).strip():
+        errors.append("missing top-level conventions block (the glossary preamble prose)")
 
     ids = [e["id"] for e in entities]
     for eid in ids:
@@ -184,11 +187,11 @@ def render_glossary(data: dict) -> str:
         "# Сквозной словарь сущностей PretRAGa",
         "",
         "СГЕНЕРИРОВАНО из `entity_map.yaml` скриптом `entity_map_build.py` — руками",
-        "не править. Единственный канал изменения сущностей, терминов и определений —",
-        "`entity_map.yaml`; сквозные конвенции — `glossary_preamble.md`. Писатель",
-        "этого файла — генератор; ручная правка ловится проверкой свежести.",
+        "не править. Единственный канал изменения сущностей, терминов, определений",
+        "и конвенций — `entity_map.yaml` (конвенции — его блок `conventions`).",
+        "Писатель этого файла — генератор; ручная правка ловится проверкой свежести.",
         "",
-        PREAMBLE.read_text(encoding="utf-8").strip(),
+        str(data["conventions"]).strip(),
         "",
         "---",
     ]
