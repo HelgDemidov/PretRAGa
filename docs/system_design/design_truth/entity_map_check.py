@@ -129,7 +129,11 @@ def impact(data: dict, changed: list[str]) -> list[str]:
 def run_checks(data: dict, quick: bool) -> int:
     errors: list[str] = []
     errors += check_map_integrity(data)
-    errors += check_generated_views(data)
+    if not errors:
+        # Rendering assumes the invariants integrity just verified (resolvable
+        # relation endpoints, triggers, definitions, conventions) — checking
+        # view freshness against an invalid map would crash, not diagnose.
+        errors += check_generated_views(data)
     anchor_errors, info = check_anchors(data)
     errors += anchor_errors
     errors += check_orphans(data)
@@ -174,21 +178,37 @@ def hook_mode() -> int:
     if not governed:
         return 0
     lines = [f"[entity-map] change touches governed path: {rel}"]
+    failed = False
     try:
         data = load_map()
     except Exception as exc:
         lines.append(f"[entity-map] MAP UNREADABLE (fix before relying on any check): {exc}")
         data = None
+        failed = True
     if data is not None:
         buf = io.StringIO()
-        with redirect_stdout(buf):
-            run_checks(data, quick=True)
-        lines.extend(buf.getvalue().strip().splitlines())
-        lines.extend(f"[entity-map] {line}" for line in impact(data, [rel]))
-    print(json.dumps(
-        {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}},
-        ensure_ascii=False,
-    ))
+        try:
+            with redirect_stdout(buf):
+                failed = run_checks(data, quick=True) != 0
+            lines.extend(buf.getvalue().strip().splitlines())
+            lines.extend(f"[entity-map] {line}" for line in impact(data, [rel]))
+        except Exception as exc:  # noqa: BLE001 — the hook must ALWAYS emit JSON
+            lines.extend(buf.getvalue().strip().splitlines())
+            lines.append(f"[entity-map] CHECKER CRASHED: {exc!r}")
+            failed = True
+    out: dict = {
+        "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}
+    }
+    if failed:
+        # Errors (not advisory info) BLOCK: the harness forces any model —
+        # including weaker executors — to address red checks before moving on.
+        out["decision"] = "block"
+        out["reason"] = (
+            "Entity map conformance FAILED — bring the truth system back to green "
+            "(usually: fix the map or run entity_map_build.py) or explicitly "
+            "surface the failure to the user before continuing."
+        )
+    print(json.dumps(out, ensure_ascii=False))
     return 0
 
 
