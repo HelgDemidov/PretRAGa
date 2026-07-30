@@ -1531,7 +1531,7 @@ dev = [
     { name = "ruff", specifier = "==0.15.22" },
     { name = "types-openpyxl", specifier = "==3.1.5.20260518" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
-    { name = "types-reportlab", specifier = "==4.5.1.20260712" },
+    { name = "types-reportlab", specifier = "==4.5.1.20260728" },
 ]
 
 [[package]]
@@ -2309,11 +2309,11 @@ wheels = [
 
 [[package]]
 name = "types-reportlab"
-version = "4.5.1.20260712"
+version = "4.5.1.20260728"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/64/bc/cb7e7d7c4077216626791f094873a917ccfe31035daaa6d85d7aaf75bbc2/types_reportlab-4.5.1.20260712.tar.gz", hash = "sha256:7c7a64b21abfb811dd323e47d6be409666820dadb587d6c2e771237b99446ac1", size = 72451, upload-time = "2026-07-12T05:13:24.037Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/b8/3115698bcebda28ef903c5a2c3f8673dc31f9023774246f25ffc09dd19b6/types_reportlab-4.5.1.20260728.tar.gz", hash = "sha256:5c8d0a2f12a533e400b9cbff82c5d11798b1a405a8ec5a2a5d84fb0ebee58c1e", size = 72669, upload-time = "2026-07-28T04:51:24.453Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/2c/cc3702c5e34eca04e243fb31dbeeda444f087590c54a6b56e2ebb1d1401e/types_reportlab-4.5.1.20260712-py3-none-any.whl", hash = "sha256:11e6bc24576d2c9f935e419b299b609b6253a9caad475e7b775fe38ed426684a", size = 113013, upload-time = "2026-07-12T05:13:23.023Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/07/c8127a9e56083bbac9e5285ce1c27a659e11c660fb1af71c2b2707770c34/types_reportlab-4.5.1.20260728-py3-none-any.whl", hash = "sha256:a4841e6668cc4b86d1acde75ee804307c49774c43c772f0d8addb2ed24b503ad", size = 113079, upload-time = "2026-07-28T04:51:23.261Z" },
 ]
 
 [[package]]

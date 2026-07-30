@@ -30,7 +30,7 @@ dev = [
     "types-PyYAML==6.0.12.20260518",
     "types-openpyxl==3.1.5.20260518",
     "reportlab==5.0.0",                # synthetic PDF fixtures for converter tests
-    "types-reportlab==4.5.1.20260712",
+    "types-reportlab==4.5.1.20260728",
     "hypothesis==6.160.0",             # property-based testing
     "erdantic==1.2.1",                 # ER diagrams generated directly from pydantic/dataclass models
     "import-linter==2.13",             # enforce import-boundary contracts between layers
