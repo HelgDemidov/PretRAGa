@@ -4,6 +4,8 @@
 # Internal working docs and process notes — not for public distribution.
 /CLAUDE.md
 /docs/
+/.claude/
+/.serena/
 
 # Local environment, not portable — recreate, do not copy.
 .venv/
