@@ -1040,7 +1040,7 @@ wheels = [
 
 [[package]]
 name = "mermaidx"
-version = "0.9.3"
+version = "0.9.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "quickjs-ng" },
@@ -1048,7 +1048,7 @@ dependencies = [
     { name = "termaid" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/ea/3df024cd53a14f3531ca3388869edaae1415dac3c54e3b95f5bc8fd54be0/mermaidx-0.9.3-py3-none-any.whl", hash = "sha256:f8e409cd69ffd564201c1e0ec0316f3e9378a5107ba74827906c9efab8146cb3", size = 1682886, upload-time = "2026-07-20T01:37:58.389Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/d8/5c0bc1561035f6a4d9b132d077b3b3420f8ee4c88d6b8153eeec9c93b150/mermaidx-0.9.4-py3-none-any.whl", hash = "sha256:a0d73d324259a3fc1ce502b1c58d1deed1e9b4f770d586669fc1f553bc62d5d5", size = 1773461, upload-time = "2026-07-24T13:47:56.465Z" },
 ]
 
 [[package]]
@@ -1504,7 +1504,7 @@ requires-dist = [
     { name = "lxml", specifier = "==6.1.1" },
     { name = "mammoth", specifier = "==1.12.0" },
     { name = "markdownify", specifier = "==1.2.3" },
-    { name = "mermaidx", specifier = "==0.9.3" },
+    { name = "mermaidx", specifier = "==0.9.4" },
     { name = "networkx", specifier = "==3.6.1" },
     { name = "numpy", specifier = "==2.5.1" },
     { name = "onnxruntime", specifier = "==1.27.0" },
