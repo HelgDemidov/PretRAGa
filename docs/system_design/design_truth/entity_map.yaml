@@ -2,11 +2,27 @@
 # Писатель: куратор (правки только через диалог/ревью). Представления (entity_map.md)
 # генерируются скриптом entity_map_build.py и руками не правятся.
 #
+# Разделение языков внутри файла — по назначению поля, а не по вкусу:
+#   английский — всё, что является или станет символом в коде: id, имена атрибутов,
+#                ключи групп и статусов, kind, тип связи, trigger, marks, implements;
+#   русский    — всё, что читает человек: definition, note, ru, названия групп,
+#                конвенции. Прозе — вся нюансировка, символу — проверяемость.
+#
 # Статусы атрибутов:
 #   fixed               — зафиксировано соглашением (см. глоссарий/видение)
 #   placeholder         — существование согласовано, состав не расписан; обязателен trigger
 #   implementation_time — роль зафиксирована, исполнитель выбирается измерением при реализации
 #   deferred            — сознательно отложено за MVP (этап 2 / пост-MVP)
+#
+# Поля сущности:
+#   id / ru / group / layer / kind / definition — обязательны
+#   implements — список путей-префиксов кода, реализующего сущность; проверяется на
+#                разрешимость. Породы с anchor: forbidden кода не имеют по определению
+#                и якорей не несут — отдельной лазейки для этого не существует.
+# Поля атрибута:
+#   name / status — обязательны; note, trigger (обязателен при placeholder) — по месту
+#   marks: identity — этот атрибут И ЕСТЬ идентичность сущности
+#   marks: version  — этот атрибут И ЕСТЬ версия, чей бамп инвалидирует продукцию
 
 # Сквозные конвенции — прозаическая часть словаря; редактируются здесь,
 # в единственном рукописном файле системы. Статей о сущностях не содержат.
@@ -39,6 +55,127 @@ conventions: |
     машинных файлов; единственная руками правимая поверхность — файлы поправок.
   - Машина никогда не пишет в человеческие файлы.
 
+# Породы сущностей — закрытый словарь. Порода несёт ОБЯЗАТЕЛЬСТВА, а не ярлык:
+# каждая колонка ниже — проверка. Новая порода — запись здесь, а не правка чекера.
+#   anchor      required | forbidden — обязан ли иметь якорь кода (implements)
+#   identity    required | optional | forbidden — обязан ли иметь атрибут marks: identity
+#   version     required | optional — обязан ли нести версию (свою marks: version
+#               либо через связь с сущностью, которая её несёт)
+#   placement   required | optional | forbidden — обязан ли быть ИСТОЧНИКОМ связи класса placement
+#   hosts       required | optional — обязан ли быть ЦЕЛЬЮ связи класса placement
+#   attributes  required | forbidden — допускаются ли атрибуты вообще
+# Нарушение forbidden — ошибка (это ошибка классификации, чинится без дизайн-решения).
+# Незакрытое required — запись в реестре открытых обязательств: чинится дизайн-решением
+# человека, поэтому считается и называется, но не блокирует.
+kinds:
+  data:
+    ru: "данные"
+    note: "хранимое с собственной схемой; получит pydantic-модель и дифф с ней"
+    anchor: required
+    identity: required
+    version: optional
+    placement: required
+    hosts: optional
+    attributes: required
+  derived:
+    ru: "производное"
+    note: "восстановимо из источника, назад не пишет; инвалидируется версией"
+    anchor: required
+    identity: optional
+    version: required
+    placement: required
+    hosts: optional
+    attributes: required
+  process:
+    ru: "процесс"
+    note: "поведение; своего хранения не имеет"
+    anchor: required
+    identity: forbidden
+    version: optional
+    placement: forbidden
+    hosts: optional
+    attributes: required
+  store:
+    ru: "хранилище"
+    note: "носитель хранения; цель связей размещения"
+    anchor: required
+    identity: optional
+    version: optional
+    placement: optional
+    hosts: required
+    attributes: required
+  data_file:
+    ru: "файл данных (человек)"
+    note: "человеко-писаный файл значений; кода не имеет, валидируется в CI"
+    anchor: forbidden
+    identity: forbidden
+    version: optional
+    placement: forbidden
+    hosts: optional
+    attributes: required
+  extension:
+    ru: "запись расширения"
+    note: "запись таблицы расширений; новая разновидность — запись, а не правка ядра"
+    anchor: required
+    identity: forbidden
+    version: required
+    placement: forbidden
+    hosts: optional
+    attributes: required
+  term:
+    ru: "термин"
+    note: "статья словаря без собственного носителя: ни кода, ни атрибутов"
+    anchor: forbidden
+    identity: forbidden
+    version: optional
+    placement: forbidden
+    hosts: optional
+    attributes: forbidden
+
+# Классы связей — то, по чему ветвятся генераторы (сегодня: обязательство placement;
+# далее: контракт слоёв import-linter строится по классу dependency).
+relation_classes:
+  composition: "владение: A состоит из B, жизненные циклы связаны"
+  reference: "ссылка: A указывает на B, без владения"
+  production: "производство: A порождает B"
+  placement: "размещение: A хранится в B"
+  dependency: "зависимость: A нужен B, чтобы работать"
+  governance: "управление: A решает, проверяет или ограничивает B"
+
+# Типы связей — закрытый, но расширяемый словарь: новый тип это запись здесь.
+# `ru` — метка по умолчанию для представлений; связь может нести свою, более точную.
+# `inverse_of` — тип записан в обратную сторону относительно канонической; объявление
+# позволяет нормализовать направление механически, не переориентируя карту руками.
+relation_types:
+  instance_of:   {ru: "экземпляр типа", class: reference}
+  composed_of:   {ru: "состоит из", class: composition}
+  carries:       {ru: "несёт", class: composition}
+  references:    {ru: "ссылается на", class: reference}
+  classified_by: {ru: "классифицируется по", class: reference}
+  produces:      {ru: "производит", class: production}
+  produced_by:   {ru: "произведён по", class: production, inverse_of: produces}
+  derived_from:  {ru: "производится из", class: production, inverse_of: produces}
+  feeds:         {ru: "питает", class: production}
+  stored_in:     {ru: "хранится в", class: placement}
+  uses:          {ru: "вызывает", class: dependency}
+  consumes:      {ru: "берёт на вход", class: dependency}
+  reads:         {ru: "читает", class: dependency}
+  governs:       {ru: "управляет", class: governance}
+
+# Триггеры решений — закрытый словарь событий, при которых плейсхолдер обязан
+# закрыться. Ключ — символ: по нему спецификация находит СВОИ плейсхолдеры.
+# Свободный текст здесь уже разъезжался («спецификация ингеста» против «не позже
+# проектирования ингеста» — одно событие двумя строками), поэтому он и закрыт.
+triggers:
+  acquisition_spec:               "спецификация добычи"
+  ingest_spec:                    "спецификация ингеста"
+  conversion_spec:                "спецификация конвертации"
+  enrichment_spec:                "спецификация обогащения"
+  synthesis_workshop_spec:        "спецификация мастерской синтеза"
+  first_vocabulary_consumer_spec: "первая спецификация, использующая словарь"
+
+# Группы — тематические, для чтения: «про что эта сущность». Ни на что не влияют,
+# кроме компоновки представлений. НЕ путать со слоями.
 groups:
   acquisition: "Добыча"
   content: "Документ и содержимое"
@@ -48,12 +185,35 @@ groups:
   query_synthesis: "Запросы и синтез"
   cross_cutting: "Сквозное"
 
+# Слои — УПОРЯДОЧЕННЫЙ словарь: порядок записи и есть порядок разрешённой
+# зависимости, сверху вниз. Слой вправе зависеть от лежащего ниже и от своего
+# собственного; зависимость вверх — ошибка. Ось здесь одна и другая, чем у групп:
+# группа отвечает «про что это», слой — «кто от кого вправе зависеть».
+#
+# Ограничиваются ТОЛЬКО связи класса dependency. Класс governance намеренно не
+# ограничен: у него направление ребра не совпадает с направлением зависимости
+# кода (таблица правил «вычисляет класс» документа, но зависит от неё код
+# документа, а не наоборот), и обобщение проверки на него дало бы ложные ошибки.
+#
+# Отсюда же вырастет контракт слоёв import-linter — как только у сущностей
+# появятся якоря кода: слой модуля равен слою его сущности.
+layers:
+  synthesis: "Мастерская синтеза"
+  query: "Слой запросов"
+  enrichment: "Обогащение"
+  curation: "Триаж и дедупликация"
+  registry: "Реестр корпуса"
+  conversion: "Конвертация"
+  acquisition: "Добыча"
+  foundation: "Сквозное основание"
+
 entities:
   # --- Добыча ---
   - id: Connector
     ru: "Коннектор"
     group: acquisition
-    kind: "запись расширения"
+    layer: acquisition
+    kind: extension
     definition: |
       Код добычи для класса мест публикации; запись в таблице расширений. Идентичность:
       имя типа + версия записи; собственного id нет. Новый коннектор — новая запись,
@@ -61,12 +221,13 @@ entities:
       с тем же контрактом.
     attributes:
       - {name: type_name, status: fixed, note: "имя типа — идентичность"}
-      - {name: entry_version, status: fixed, note: "версия записи; бамп инвалидирует её продукцию"}
+      - {name: entry_version, status: fixed, marks: version, note: "версия записи; бамп инвалидирует её продукцию"}
       - {name: contract_full_view, status: fixed, note: "адаптер отдаёт полный срез; ядро не хранит состояние адаптера"}
   - id: AcquisitionChannel
     ru: "Канал добычи"
     group: acquisition
-    kind: "операционная конфигурация"
+    layer: acquisition
+    kind: data
     definition: |
       Настроенный экземпляр коннектора, дающий поток документов («EUR-Lex с запросом
       по ИИ» и «EUR-Lex с запросом по кибербезопасности» — два разных канала). Операционная
@@ -76,43 +237,46 @@ entities:
       провенанс документов переживал переименования. Машинное состояние забора (курсоры,
       ошибки, карантин) — отдельный артефакт. Каналы выводятся (retire), не удаляются.
     attributes:
-      - {name: id, status: fixed, note: "маленький иммутабельный id — для провенанса"}
+      - {name: id, status: fixed, marks: identity, note: "маленький иммутабельный id — для провенанса"}
       - {name: connector_type, status: fixed, note: "ссылка на запись расширения"}
       - {name: config, status: fixed, note: "нормализуема — для дедупликации каналов"}
       - {name: schedule_periodicity, status: fixed, note: "заявленная периодичность опроса"}
-      - {name: declared_coverage, status: placeholder, trigger: "спецификация добычи", note: "юрисдикции/тематики/типы — состав не расписан"}
-      - {name: homogeneity_declarations, status: placeholder, trigger: "спецификация добычи", note: "по каким атрибутам канал гомогенен"}
-      - {name: gate0_rules, status: placeholder, trigger: "спецификация добычи", note: "детерминированная гигиена входа"}
-      - {name: lifecycle_states, status: placeholder, trigger: "спецификация добычи", note: "retire-not-delete зафиксирован; полный список состояний — нет"}
+      - {name: declared_coverage, status: placeholder, trigger: acquisition_spec, note: "юрисдикции/тематики/типы — состав не расписан"}
+      - {name: homogeneity_declarations, status: placeholder, trigger: acquisition_spec, note: "по каким атрибутам канал гомогенен"}
+      - {name: gate0_rules, status: placeholder, trigger: acquisition_spec, note: "детерминированная гигиена входа"}
+      - {name: lifecycle_states, status: placeholder, trigger: acquisition_spec, note: "retire-not-delete зафиксирован; полный список состояний — нет"}
       - {name: fetch_state, status: fixed, note: "курсоры/ошибки/карантин — отдельный машинный артефакт"}
   - id: AcquisitionAct
     ru: "Акт добычи"
     group: acquisition
-    kind: "машинный журнал"
+    layer: acquisition
+    kind: data
     definition: |
       Машинная запись журнала: какой канал, когда, что принёс. Писатель — машина.
     attributes:
       - {name: channel_ref, status: fixed}
       - {name: occurred_at, status: fixed}
-      - {name: record_fields, status: placeholder, trigger: "спецификация добычи", note: "полный состав записи журнала"}
+      - {name: record_fields, status: placeholder, trigger: acquisition_spec, note: "полный состав записи журнала"}
   - id: RawPayload
     ru: "Сырой payload"
     group: acquisition
-    kind: "неизменяемое значение"
+    layer: acquisition
+    kind: data
     definition: |
       Скачанное тело документа как получено: неизменяемое значение, контент-адресованный
       файл. Хранится и для отвергнутых кандидатов. Первичный артефакт, а не производный:
       веб гниёт, сырьё лишь частично восстановимо повторным скачиванием — поэтому оно
       не живёт внутри стираемого файла базы.
     attributes:
-      - {name: content_hash, status: fixed, note: "контент-адресация"}
+      - {name: content_hash, status: fixed, marks: identity, note: "контент-адресация"}
       - {name: file_store, status: fixed, note: "контент-адресованные файлы, вне БД — веб гниёт"}
       - {name: retained_for_rejected, status: fixed, note: "хранится и для отвергнутых"}
       - {name: retention_policy, status: deferred, note: "ручка очистки по сроку — пост-MVP"}
   - id: AcquisitionHint
     ru: "Подсказка добычи"
     group: acquisition
-    kind: "производное"
+    layer: acquisition
+    kind: derived
     definition: |
       Производный сигнал пере-наполнения корпуса: висячие типизированные ссылки —
       документы, которые корпус цитирует, но не содержит. Машинно-генерируемая
@@ -124,7 +288,8 @@ entities:
   - id: Document
     ru: "Документ"
     group: content
-    kind: "сущность (уровень работы)"
+    layer: registry
+    kind: data
     definition: |
       Единица корпуса; сущность с историей (уровень «работы» — Work). Идентичность —
       чеканная, выдаётся на стадии кандидата. Сопоставимость — через схематизированные
@@ -137,31 +302,33 @@ entities:
       и уверенностью; неуверенное — в очередь исключений. Класс авторитетности не
       хранится — вычисляется таблицей правил.
     attributes:
-      - {name: uuid, status: fixed, note: "чеканный, класса UUIDv7, на стадии кандидата"}
+      - {name: uuid, status: fixed, marks: identity, note: "чеканный, класса UUIDv7, на стадии кандидата"}
       - {name: origin_coordinates, status: fixed, note: "пары схема+значение (ELI/CELEX/реестр/URL)"}
-      - {name: coordinate_scheme_whitelist, status: placeholder, trigger: "спецификация ингеста", note: "какие схемы дают авто-склейку; URL — никогда"}
+      - {name: coordinate_scheme_whitelist, status: placeholder, trigger: ingest_spec, note: "какие схемы дают авто-склейку; URL — никогда"}
       - {name: lifecycle, status: fixed, note: "кандидат → активен → выведен; закрытое множество"}
       - {name: classification_attributes, status: fixed, note: "издатель, тип, юрисдикция, уровень, обязательность, язык, тематики — машинные, словарные"}
       - {name: authority_class, status: fixed, note: "вычисляется таблицей правил, не хранится"}
       - {name: completeness_score, status: fixed, note: "машинный счётчик полноты метаданных"}
-      - {name: completeness_formula, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: completeness_formula, status: placeholder, trigger: enrichment_spec}
       - {name: channel_ref, status: fixed}
       - {name: act_ref, status: fixed}
   - id: ContentVersion
     ru: "Версия содержимого"
     group: content
-    kind: "неизменяемое значение"
+    layer: conversion
+    kind: data
     definition: |
       Неизменяемое значение с **двухосным ключом (язык, редакция)**: перевод — не новая
       редакция, новая редакция — не перевод. Повторный забор с изменившимся содержимым
       порождает новую редакцию того же Документа. Payload версии контент-адресован.
     attributes:
-      - {name: key, status: fixed, note: "двухосный ключ (язык, редакция)"}
+      - {name: key, status: fixed, marks: identity, note: "двухосный ключ (язык, редакция)"}
       - {name: payload_ref, status: fixed}
   - id: CanonicalText
     ru: "Канонический текст"
     group: content
-    kind: "неизменяемое значение"
+    layer: conversion
+    kind: data
     definition: |
       Markdown-представление версии содержимого — **единственный несущий формат** корпуса
       (целостность якорного пространства). Внутри законны структурные острова: таблицы
@@ -170,57 +337,62 @@ entities:
       конвертации — это второе звено провенанса (транскрипции OCR и диаграмм наследуют
       свою оговорку через него).
     attributes:
-      - {name: content_hash, status: fixed}
+      - {name: content_hash, status: fixed, marks: identity}
       - {name: format, status: fixed, note: "Markdown — единственный носитель; острова: таблицы, mermaid (проверка рендером)"}
   - id: ConversionRecord
     ru: "Запись конвертации"
     group: content
-    kind: "машинный журнал"
+    layer: conversion
+    kind: data
     definition: |
       Машинная запись второго звена провенанса: каким конвертером и какой его версией
       канонический текст произведён из сырья. Через неё транскрипции (OCR, диаграммы)
       наследуют свою оговорку.
     attributes:
-      - {name: converter_entry_version, status: fixed, note: "второе звено провенанса"}
-      - {name: record_fields, status: placeholder, trigger: "спецификация конвертации"}
+      - {name: converter_entry_version, status: fixed, marks: version, note: "второе звено провенанса"}
+      - {name: record_fields, status: placeholder, trigger: conversion_spec}
   - id: ProvenanceAnchor
     ru: "Якорь провенанса"
     group: content
-    kind: "неизменяемое значение"
+    layer: conversion
+    kind: data
     definition: |
       Тройка **(версия содержимого, хэш канонического текста, символьный интервал)** —
       публикуемый стабильный адрес улики. Не зависит от нарезки на фрагменты и её версий.
       Якоря живут **только в оригинале**: перевод не бывает носителем якорей.
     attributes:
-      - {name: triple, status: fixed, note: "(версия содержимого, хэш канонического текста, символьный интервал)"}
+      - {name: triple, status: fixed, marks: identity, note: "(версия содержимого, хэш канонического текста, символьный интервал)"}
       - {name: original_only, status: fixed, note: "якоря только в оригинале, не в переводах"}
   - id: Fragment
     ru: "Фрагмент"
     group: content
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Производная единица поиска — отрезок канонического текста с известным интервалом.
       Пересоздаётся свободно при смене нарезки; долгоживущие ссылки на фрагменты запрещены —
       ссылаются на якоря.
     attributes:
       - {name: span, status: fixed}
-      - {name: chunker_version, status: fixed, note: "пересоздаваем; долгоживущие ссылки на фрагменты запрещены"}
+      - {name: chunker_version, status: fixed, marks: version, note: "пересоздаваем; долгоживущие ссылки на фрагменты запрещены"}
   - id: Translation
     ru: "Перевод"
     group: content
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Производное представление версии содержимого для чтения и, при необходимости,
       эмбеддинга. Линза, не носитель якорей; извлечение утверждений идёт по оригиналу.
     attributes:
       - {name: lens_only, status: fixed, note: "линза для чтения/эмбеддинга; не носитель якорей"}
-      - {name: caching_detail, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: caching_detail, status: placeholder, trigger: enrichment_spec}
 
   # --- Факты и граф ---
   - id: Claim
     ru: "Утверждение"
     group: facts_graph
-    kind: "значение"
+    layer: enrichment
+    kind: data
     definition: |
       Значение, не сущность: «Документ W в версии V утверждает X». Идентичность производна
       от (якорь, нормализованное содержание). Якорь обязателен — проверяется на входе,
@@ -229,18 +401,19 @@ entities:
       графа. Метка происхождения: deterministic / inferred / human-curated. Утверждение —
       позиция документа, не истина о мире.
     attributes:
-      - {name: identity, status: fixed, note: "производна от (якорь, нормализованное содержание)"}
+      - {name: identity, status: fixed, marks: identity, note: "производна от (якорь, нормализованное содержание)"}
       - {name: anchor_required, status: fixed, note: "валидация на входе; без якоря непредставимо"}
       - {name: spo_structure, status: fixed, note: "опциональная тройка субъект-предикат-объект — ребро графа"}
-      - {name: predicate_vocabulary, status: placeholder, trigger: "спецификация обогащения", note: "малый словарь предикатов"}
-      - {name: temporal_reference, status: placeholder, trigger: "спецификация обогащения", note: "о каком времени говорит утверждение"}
+      - {name: predicate_vocabulary, status: placeholder, trigger: enrichment_spec, note: "малый словарь предикатов"}
+      - {name: temporal_reference, status: placeholder, trigger: enrichment_spec, note: "о каком времени говорит утверждение"}
       - {name: provenance_label, status: fixed, note: "deterministic / inferred / human-curated"}
-      - {name: extractor_version, status: fixed}
+      - {name: extractor_version, status: fixed, marks: version}
       - {name: semantics, status: fixed, note: "позиция документа, не истина о мире"}
   - id: TypedReference
     ru: "Типизированная ссылка"
     group: facts_graph
-    kind: "значение"
+    layer: enrichment
+    kind: data
     definition: |
       Ребро документ↔документ (cites / amends / implements / supersedes; словарь на основе
       онтологии ELI). Добывается детерминированно: из payload коннектора либо
@@ -249,41 +422,45 @@ entities:
       машинные подсказки добычи.
     attributes:
       - {name: base_types, status: fixed, note: "cites/amends/implements/supersedes — база ELI"}
-      - {name: full_type_vocabulary, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: full_type_vocabulary, status: placeholder, trigger: enrichment_spec}
       - {name: source, status: fixed, note: "payload коннектора | идентификатор в тексте (с якорем)"}
   - id: WorldEntity
     ru: "Сущность мира"
     group: facts_graph
-    kind: "сущность"
+    layer: enrichment
+    kind: data
     definition: |
       Узел графа: организация, страна, технология и т.п. Нормализация поверхностных форм —
       через человеко-писаную таблицу (см. открытые пункты: разрешение сущностей).
     attributes:
-      - {name: normalization_table, status: placeholder, trigger: "спецификация обогащения", note: "открытый пункт: разрешение сущностей"}
+      - {name: normalization_table, status: placeholder, trigger: enrichment_spec, note: "открытый пункт: разрешение сущностей"}
   - id: ControlledVocabulary
     ru: "Контролируемый словарь"
     group: facts_graph
-    kind: "мета-уровень (человек)"
+    layer: foundation
+    kind: data_file
     definition: |
       Внешний словарь значений классификации; проверяется в CI; код по значениям не
       ветвится. Писатель — человек (кардинальность десятков).
     attributes:
       - {name: mechanism, status: fixed, note: "внешний словарь, CI-валидация, код не ветвится"}
-      - {name: vocabulary_contents, status: placeholder, trigger: "первая спецификация, использующая словарь", note: "составы: издатели, типы, юрисдикции, уровни, обязательность, тематики, предикаты, типы ссылок, типы узлов"}
+      - {name: vocabulary_contents, status: placeholder, trigger: first_vocabulary_consumer_spec, note: "составы: издатели, типы, юрисдикции, уровни, обязательность, тематики, предикаты, типы ссылок, типы узлов"}
   - id: AuthorityRuleTable
     ru: "Таблица авторитетности"
     group: facts_graph
-    kind: "мета-уровень (человек)"
+    layer: foundation
+    kind: data_file
     definition: |
       Человеко-писаная таблица: (издатель, тип, обязательность, уровень) → класс
       авторитетности. Документы получают класс вычислением, никогда — рукой.
     attributes:
       - {name: mechanism, status: fixed, note: "(издатель, тип, обязательность, уровень) → класс"}
-      - {name: table_content, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: table_content, status: placeholder, trigger: enrichment_spec}
   - id: GraphLayer
     ru: "Граф"
     group: facts_graph
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Производный слой: узлы — работы, сущности мира, темы; рёбра — типизированные ссылки
       и утверждения; поверх — производные агрегаты. Мультиструктурность — проекции по
@@ -294,25 +471,27 @@ entities:
       - {name: node_types, status: fixed, note: "работы, сущности мира, темы"}
       - {name: projections, status: fixed, note: "мультиструктурность — проекции по типам рёбер"}
       - {name: communities, status: fixed, note: "кластеризация Leiden-класса на проекциях; метка inferred; навигация, не факты"}
-      - {name: meta_hierarchy, status: placeholder, trigger: "спецификация обогащения", note: "словарь типов узлов + предикатов + посев нормализации"}
+      - {name: meta_hierarchy, status: placeholder, trigger: enrichment_spec, note: "словарь типов узлов + предикатов + посев нормализации"}
       - {name: community_summaries, status: deferred, note: "сводки сообществ — этап 2"}
   - id: VerbalizedGraphContext
     ru: "Словесная обвязка"
     group: facts_graph
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Текстовый контекст (сущности, связи, принадлежность), приписываемый фрагменту перед
       эмбеддингом — так граф входит в вектора через текст. Вход эмбеддера ≠ заякоренный
       текст: что подавалось модели — параметр в манифесте деривации, якорей не касается.
     attributes:
       - {name: mechanism, status: fixed, note: "граф входит в вектора через текст; вход эмбеддера ≠ заякоренный текст"}
-      - {name: template, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: template, status: placeholder, trigger: enrichment_spec}
 
   # --- Реестр и хранение ---
   - id: CorpusRegistry
     ru: "Реестр корпуса"
     group: storage
-    kind: "хранилище (git)"
+    layer: registry
+    kind: store
     definition: |
       Картотека корпуса, версионируется в git рабочего пространства. На документ — два
       файла с разными писателями: машинная запись (record; человек не правит никогда)
@@ -324,12 +503,13 @@ entities:
     attributes:
       - {name: record_machine, status: fixed, note: "машинная запись; человек не правит"}
       - {name: overrides_human, status: fixed, note: "разреженные поправки — единственная ручная поверхность; бьют машинное"}
-      - {name: record_schema, status: placeholder, trigger: "спецификация ингеста"}
+      - {name: record_schema, status: placeholder, trigger: ingest_spec}
       - {name: storage_boundary, status: fixed, note: "членство и жизненный цикл → git; ход обработки → машинное хранилище"}
   - id: MachineStore
     ru: "Машинное хранилище"
     group: storage
-    kind: "хранилище (роль)"
+    layer: foundation
+    kind: store
     definition: |
       Встраиваемое бессерверное табличное хранилище машинного состояния: журналы,
       утверждения, якоря, очереди склеек, курсоры, уверенности. Это роль, не движок:
@@ -340,7 +520,8 @@ entities:
   - id: VectorIndex
     ru: "Векторный индекс"
     group: storage
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Производный слой: плотные вектора фрагментов от одной мультиязычной облачной
       модели (роль; конкретная модель и точность — выбор этапа реализации). Несёт
@@ -351,7 +532,8 @@ entities:
   - id: LexicalIndex
     ru: "Лексический индекс"
     group: storage
-    kind: "производное"
+    layer: enrichment
+    kind: derived
     definition: |
       Производный слой: локальный полнотекстовый канал класса BM25 — точность по
       идентификаторам и числам. Движок — выбор этапа реализации; несёт манифест
@@ -362,26 +544,28 @@ entities:
   - id: DerivationManifest
     ru: "Манифест деривации"
     group: storage
-    kind: "значение"
+    layer: foundation
+    kind: data
     definition: |
       Паспорт производного артефакта: коммит реестра + версии записей деривации
       (экстракторов, модели эмбеддинга, параметров входа).
     attributes:
       - {name: registry_commit, status: fixed}
-      - {name: derivation_versions, status: fixed, note: "версии экстракторов/модели эмбеддинга/параметров входа"}
+      - {name: derivation_versions, status: fixed, marks: version, note: "версии экстракторов/модели эмбеддинга/параметров входа"}
   - id: Corpus
     ru: "Корпус"
     group: storage
-    kind: "предикат"
+    layer: registry
+    kind: term
     definition: |
       Не хранимая сущность, а предикат состояния: корпус = все активные документы реестра.
       Нет id, нет конфигурации, нет собственного жизненного цикла.
-    attributes:
-      - {name: definition, status: fixed, note: "все активные документы реестра; без id и конфигурации"}
+    attributes: []
   - id: Workspace
     ru: "Рабочее пространство"
     group: storage
-    kind: "хранилище"
+    layer: foundation
+    kind: store
     definition: |
       Директория корпуса, индексов и деливераблов со своим git — всегда отдельно от
       репозитория кода.
@@ -392,18 +576,20 @@ entities:
   - id: AdmissionMinimum
     ru: "Минимум приёмки"
     group: processes
-    kind: "политика"
+    layer: registry
+    kind: process
     definition: |
       Именованная, версионируемая, машинно-проверяемая политика: без чего кандидат не
       становится активным. Одна функция структурных инвариантов: загрузчик падает,
       валидатор собирает. Состав — открытый пункт с обязательным доуточнением.
     attributes:
       - {name: mechanism, status: fixed, note: "одна функция: загрузчик падает, валидатор собирает; версионируема"}
-      - {name: composition, status: placeholder, trigger: "не позже проектирования ингеста", note: "главный открытый пункт"}
+      - {name: composition, status: placeholder, trigger: ingest_spec, note: "главный открытый пункт"}
   - id: Triage
     ru: "Триаж"
     group: processes
-    kind: "процесс"
+    layer: curation
+    kind: process
     definition: |
       Суждение о включении кандидата в корпус — на полных данных, после скачивания и
       конвертации. Сначала правила, дешёвая модель — где правил мало. Вердикт с причиной
@@ -413,11 +599,12 @@ entities:
       - {name: full_evidence, status: fixed, note: "после скачивания и конвертации"}
       - {name: verdict_with_reason, status: fixed, note: "вердикт останавливает продвижение; удаления не существует"}
       - {name: rules_then_llm, status: fixed, note: "сначала правила, дешёвая модель где правил мало"}
-      - {name: ruleset, status: placeholder, trigger: "спецификация ингеста"}
+      - {name: ruleset, status: placeholder, trigger: ingest_spec}
   - id: Deduplication
     ru: "Дедупликация"
     group: processes
-    kind: "процесс"
+    layer: curation
+    kind: process
     definition: |
       Две точки принуждения. На входе — только детерминированное, автоматически: хэш
       payload (зеркала) + белый список надёжных координатных схем (URL не склеивает
@@ -430,7 +617,8 @@ entities:
   - id: MergeOperation
     ru: "Склейка"
     group: processes
-    kind: "процесс"
+    layer: curation
+    kind: process
     definition: |
       Операция над живыми документами: выживший Document забирает линейки версий;
       идентификатор дубля становится вечным алиасом — не удаляется и не переиспользуется.
@@ -440,7 +628,8 @@ entities:
   - id: Enrichment
     ru: "Обогащение"
     group: processes
-    kind: "процесс"
+    layer: enrichment
+    kind: process
     definition: |
       Производство хранимых производных слоёв в стиле реконсиляции. Всё производное
       восстановимо из корпуса и никогда не пишет назад. Двухуровневая инкрементальность:
@@ -453,18 +642,20 @@ entities:
   - id: ExceptionQueue
     ru: "Очередь исключений"
     group: processes
-    kind: "процесс"
+    layer: curation
+    kind: process
     definition: |
       Единственная точка, где машина зовёт человека внутрь потока данных: неуверенные
       извлечения и неоднозначные склейки. Состав и правила — открытый пункт
       (спецификация обогащения).
     attributes:
       - {name: concept, status: fixed, note: "неуверенные извлечения и неоднозначные склейки — человеку"}
-      - {name: detail, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: detail, status: placeholder, trigger: enrichment_spec}
   - id: Reconciliation
     ru: "Реконсиляция"
     group: processes
-    kind: "дисциплина"
+    layer: foundation
+    kind: process
     definition: |
       Дисциплина батчей: работа выводится из состояния мира, не из хранимого флага;
       повторный прогон — пустая операция; чинится история, а не только будущее. Отказ
@@ -479,7 +670,8 @@ entities:
   - id: QueryLayer
     ru: "Слой запросов"
     group: query_synthesis
-    kind: "процесс (ничего не хранит)"
+    layer: query
+    kind: process
     definition: |
       По-вопросные вычисления, ничего не хранит. Гибридный поиск (плотные вектора из
       облака + локальный лексический канал) → слияние → посевные узлы → расширение по
@@ -497,7 +689,8 @@ entities:
   - id: TrendQuery
     ru: "Запрос тренда"
     group: query_synthesis
-    kind: "процесс"
+    layer: query
+    kind: process
     definition: |
       Счётный запрос к слою утверждений: считаются работы, не языковые копии.
       Семантика числа — представленность в корпусе, не независимая корроборация;
@@ -509,7 +702,8 @@ entities:
   - id: Deliverable
     ru: "Деливерабл"
     group: query_synthesis
-    kind: "сущность"
+    layer: synthesis
+    kind: data
     definition: |
       Итоговый документ: Markdown в git рабочего пространства, версионируем по построению.
       Каждая версия штампуется манифестом деривации. Семейство вариантов — над явно
@@ -521,20 +715,22 @@ entities:
   - id: DeliverableValidator
     ru: "Валидатор деливерабла"
     group: query_synthesis
-    kind: "процесс"
+    layer: synthesis
+    kind: process
     definition: |
       Механический контролёр черновика: каждое фактическое утверждение несёт разрешимую
       ссылку на якорь; не имеющее ссылки либо явно помечено как суждение автора, либо
       удаляется.
     attributes:
       - {name: mechanism, status: fixed, note: "каждое утверждение → разрешимая ссылка на якорь; иначе пометка «суждение автора» или удаление"}
-      - {name: check_rules, status: placeholder, trigger: "спецификация мастерской синтеза"}
+      - {name: check_rules, status: placeholder, trigger: synthesis_workshop_spec}
 
   # --- Сквозное ---
   - id: NetworkClient
     ru: "Сетевой клиент"
     group: cross_cutting
-    kind: "сквозной модуль"
+    layer: foundation
+    kind: process
     definition: |
       Единственный модуль всех исходящих вызовов — и моделей, и скачивания: повторы с
       нарастающими паузами и разбросом, распознавание ошибки внутри успешного ответа,
@@ -546,7 +742,8 @@ entities:
   - id: WriterLock
     ru: "Замок писателя"
     group: cross_cutting
-    kind: "сквозной механизм"
+    layer: foundation
+    kind: process
     definition: |
       Один замок на все пишущие операции рабочего пространства, включая каждую подкоманду;
       чтение — без замка, по снимку.
@@ -556,83 +753,94 @@ entities:
 
 relations:
   # Добыча
-  - {from: AcquisitionChannel, to: Connector, type: "экземпляр типа"}
-  - {from: AcquisitionChannel, to: AcquisitionAct, type: "порождает"}
-  - {from: AcquisitionAct, to: RawPayload, type: "приносит"}
-  - {from: AcquisitionAct, to: Document, type: "вводит кандидата"}
-  - {from: AcquisitionAct, to: NetworkClient, type: "скачивает через"}
-  - {from: AcquisitionHint, to: AcquisitionChannel, type: "питает пере-наполнение"}
+  - {from: AcquisitionChannel, to: Connector, type: instance_of, ru: "экземпляр типа"}
+  - {from: AcquisitionChannel, to: AcquisitionAct, type: produces, ru: "порождает"}
+  - {from: AcquisitionAct, to: RawPayload, type: produces, ru: "приносит"}
+  - {from: AcquisitionAct, to: Document, type: produces, ru: "вводит кандидата"}
+  - {from: AcquisitionAct, to: NetworkClient, type: uses, ru: "скачивает через"}
+  - {from: AcquisitionHint, to: AcquisitionChannel, type: feeds, ru: "питает пере-наполнение"}
   # Документ и содержимое
-  - {from: Document, to: ContentVersion, type: "имеет версии"}
-  - {from: ContentVersion, to: RawPayload, type: "payload"}
-  - {from: ContentVersion, to: CanonicalText, type: "канонизируется в"}
-  - {from: CanonicalText, to: ConversionRecord, type: "произведён по"}
-  - {from: ConversionRecord, to: RawPayload, type: "из сырья"}
-  - {from: CanonicalText, to: Fragment, type: "нарезается на"}
-  - {from: CanonicalText, to: ProvenanceAnchor, type: "адресуется"}
-  - {from: Fragment, to: ProvenanceAnchor, type: "несёт интервал"}
-  - {from: Translation, to: ContentVersion, type: "линза над"}
-  - {from: Document, to: CorpusRegistry, type: "записан в"}
-  - {from: Document, to: ControlledVocabulary, type: "классифицируется по"}
-  - {from: AuthorityRuleTable, to: Document, type: "вычисляет класс"}
+  - {from: Document, to: ContentVersion, type: composed_of, ru: "имеет версии"}
+  - {from: ContentVersion, to: RawPayload, type: references, ru: "payload"}
+  - {from: ContentVersion, to: CanonicalText, type: produces, ru: "канонизируется в"}
+  - {from: CanonicalText, to: ConversionRecord, type: produced_by, ru: "произведён по"}
+  - {from: ConversionRecord, to: RawPayload, type: consumes, ru: "из сырья"}
+  - {from: CanonicalText, to: Fragment, type: produces, ru: "нарезается на"}
+  - {from: CanonicalText, to: ProvenanceAnchor, type: produces, ru: "адресуется"}
+  - {from: Fragment, to: ProvenanceAnchor, type: carries, ru: "несёт интервал"}
+  - {from: Translation, to: ContentVersion, type: derived_from, ru: "линза над"}
+  - {from: Document, to: CorpusRegistry, type: stored_in, ru: "записан в"}
+  - {from: Document, to: ControlledVocabulary, type: classified_by, ru: "классифицируется по"}
+  - {from: AuthorityRuleTable, to: Document, type: governs, ru: "вычисляет класс"}
+  - {from: Document, to: AcquisitionChannel, type: references, ru: "провенанс канала"}
+  - {from: ProvenanceAnchor, to: ContentVersion, type: references, ru: "версия в тройке"}
   # Факты и граф
-  - {from: Claim, to: ProvenanceAnchor, type: "заякорено"}
-  - {from: Claim, to: WorldEntity, type: "упоминает"}
-  - {from: Claim, to: ControlledVocabulary, type: "темы и предикаты из"}
-  - {from: TypedReference, to: Document, type: "связывает документы"}
-  - {from: TypedReference, to: ProvenanceAnchor, type: "якорь текстовой находки"}
-  - {from: TypedReference, to: ControlledVocabulary, type: "типы из"}
-  - {from: TypedReference, to: AcquisitionHint, type: "висячая порождает"}
-  - {from: GraphLayer, to: Claim, type: "рёбра из"}
-  - {from: GraphLayer, to: TypedReference, type: "рёбра из"}
-  - {from: GraphLayer, to: WorldEntity, type: "узлы"}
-  - {from: GraphLayer, to: Document, type: "узлы-работы"}
-  - {from: GraphLayer, to: ControlledVocabulary, type: "мета-словари"}
-  - {from: VerbalizedGraphContext, to: GraphLayer, type: "черпает из"}
-  - {from: VerbalizedGraphContext, to: VectorIndex, type: "вход эмбеддинга"}
+  - {from: Claim, to: ProvenanceAnchor, type: references, ru: "заякорено"}
+  - {from: Claim, to: WorldEntity, type: references, ru: "упоминает"}
+  - {from: Claim, to: ControlledVocabulary, type: classified_by, ru: "темы и предикаты из"}
+  - {from: TypedReference, to: Document, type: references, ru: "связывает документы"}
+  - {from: TypedReference, to: ProvenanceAnchor, type: references, ru: "якорь текстовой находки"}
+  - {from: TypedReference, to: ControlledVocabulary, type: classified_by, ru: "типы из"}
+  - {from: TypedReference, to: AcquisitionHint, type: produces, ru: "висячая порождает"}
+  - {from: GraphLayer, to: Claim, type: derived_from, ru: "рёбра из"}
+  - {from: GraphLayer, to: TypedReference, type: derived_from, ru: "рёбра из"}
+  - {from: GraphLayer, to: WorldEntity, type: derived_from, ru: "узлы"}
+  - {from: GraphLayer, to: Document, type: derived_from, ru: "узлы-работы"}
+  - {from: GraphLayer, to: ControlledVocabulary, type: classified_by, ru: "мета-словари"}
+  - {from: VerbalizedGraphContext, to: GraphLayer, type: derived_from, ru: "черпает из"}
+  - {from: VerbalizedGraphContext, to: VectorIndex, type: feeds, ru: "вход эмбеддинга"}
   # Реестр и хранение
-  - {from: Corpus, to: CorpusRegistry, type: "предикат над"}
-  - {from: CorpusRegistry, to: Workspace, type: "живёт в"}
-  - {from: RawPayload, to: Workspace, type: "живёт в"}
-  - {from: MachineStore, to: Workspace, type: "живёт в"}
-  - {from: AcquisitionAct, to: MachineStore, type: "хранится в"}
-  - {from: ConversionRecord, to: MachineStore, type: "хранится в"}
-  - {from: Claim, to: MachineStore, type: "хранится в"}
-  - {from: VectorIndex, to: Fragment, type: "индексирует"}
-  - {from: LexicalIndex, to: CanonicalText, type: "индексирует"}
-  - {from: VectorIndex, to: DerivationManifest, type: "несёт"}
-  - {from: LexicalIndex, to: DerivationManifest, type: "несёт"}
-  - {from: GraphLayer, to: DerivationManifest, type: "несёт"}
-  - {from: DerivationManifest, to: CorpusRegistry, type: "коммит реестра"}
+  - {from: Corpus, to: CorpusRegistry, type: derived_from, ru: "предикат над"}
+  - {from: CorpusRegistry, to: Workspace, type: stored_in, ru: "живёт в"}
+  - {from: RawPayload, to: Workspace, type: stored_in, ru: "живёт в"}
+  - {from: MachineStore, to: Workspace, type: stored_in, ru: "живёт в"}
+  - {from: AcquisitionAct, to: MachineStore, type: stored_in, ru: "хранится в"}
+  - {from: ConversionRecord, to: MachineStore, type: stored_in, ru: "хранится в"}
+  - {from: Claim, to: MachineStore, type: stored_in, ru: "хранится в"}
+  - {from: VectorIndex, to: Fragment, type: derived_from, ru: "индексирует"}
+  - {from: LexicalIndex, to: CanonicalText, type: derived_from, ru: "индексирует"}
+  - {from: VectorIndex, to: DerivationManifest, type: carries, ru: "несёт"}
+  - {from: LexicalIndex, to: DerivationManifest, type: carries, ru: "несёт"}
+  - {from: GraphLayer, to: DerivationManifest, type: carries, ru: "несёт"}
+  - {from: DerivationManifest, to: CorpusRegistry, type: references, ru: "коммит реестра"}
+  - {from: ProvenanceAnchor, to: MachineStore, type: stored_in, ru: "хранится в"}
+  - {from: VectorIndex, to: Workspace, type: stored_in, ru: "живёт в"}
+  - {from: LexicalIndex, to: Workspace, type: stored_in, ru: "живёт в"}
   # Процессы
-  - {from: AdmissionMinimum, to: Document, type: "ворота приёмки"}
-  - {from: Triage, to: Document, type: "выносит вердикт"}
-  - {from: Triage, to: ExceptionQueue, type: "направляет"}
-  - {from: Deduplication, to: MergeOperation, type: "предлагает"}
-  - {from: MergeOperation, to: Document, type: "объединяет"}
-  - {from: Enrichment, to: Claim, type: "извлекает"}
-  - {from: Enrichment, to: TypedReference, type: "извлекает"}
-  - {from: Enrichment, to: Translation, type: "производит"}
-  - {from: Enrichment, to: VerbalizedGraphContext, type: "генерирует"}
-  - {from: Enrichment, to: VectorIndex, type: "строит"}
-  - {from: Enrichment, to: LexicalIndex, type: "строит"}
-  - {from: Enrichment, to: GraphLayer, type: "строит"}
-  - {from: Enrichment, to: ExceptionQueue, type: "направляет"}
-  - {from: Enrichment, to: NetworkClient, type: "вызывает"}
-  - {from: Reconciliation, to: Triage, type: "пере-триаж"}
-  - {from: Reconciliation, to: Deduplication, type: "пере-предлагает"}
-  - {from: Reconciliation, to: Enrichment, type: "правит"}
+  - {from: AdmissionMinimum, to: Document, type: governs, ru: "ворота приёмки"}
+  - {from: Triage, to: Document, type: governs, ru: "выносит вердикт"}
+  - {from: Triage, to: ExceptionQueue, type: feeds, ru: "направляет"}
+  - {from: Deduplication, to: MergeOperation, type: feeds, ru: "предлагает"}
+  - {from: MergeOperation, to: Document, type: governs, ru: "объединяет"}
+  - {from: Enrichment, to: Claim, type: produces, ru: "извлекает"}
+  - {from: Enrichment, to: TypedReference, type: produces, ru: "извлекает"}
+  - {from: Enrichment, to: Translation, type: produces, ru: "производит"}
+  - {from: Enrichment, to: VerbalizedGraphContext, type: produces, ru: "генерирует"}
+  - {from: Enrichment, to: VectorIndex, type: produces, ru: "строит"}
+  - {from: Enrichment, to: LexicalIndex, type: produces, ru: "строит"}
+  - {from: Enrichment, to: GraphLayer, type: produces, ru: "строит"}
+  - {from: Enrichment, to: ExceptionQueue, type: feeds, ru: "направляет"}
+  - {from: Enrichment, to: NetworkClient, type: uses, ru: "вызывает"}
+  - {from: Reconciliation, to: Triage, type: governs, ru: "пере-триаж"}
+  - {from: Reconciliation, to: Deduplication, type: governs, ru: "пере-предлагает"}
+  - {from: Reconciliation, to: Enrichment, type: governs, ru: "правит"}
+  - {from: Triage, to: RawPayload, type: reads, ru: "судит после скачивания"}
+  - {from: Triage, to: CanonicalText, type: reads, ru: "и после конвертации"}
+  - {from: Enrichment, to: ContentVersion, type: reads, ru: "единица пере-деривации"}
+  - {from: Enrichment, to: Fragment, type: reads, ru: "единица дорогого перерасчёта"}
   # Запросы и синтез
-  - {from: QueryLayer, to: VectorIndex, type: "читает"}
-  - {from: QueryLayer, to: LexicalIndex, type: "читает"}
-  - {from: QueryLayer, to: GraphLayer, type: "расширяет по (PPR)"}
-  - {from: QueryLayer, to: CorpusRegistry, type: "сверяет свежесть"}
-  - {from: QueryLayer, to: ProvenanceAnchor, type: "выдаёт"}
-  - {from: QueryLayer, to: NetworkClient, type: "эмбеддинг вопроса"}
-  - {from: TrendQuery, to: Claim, type: "считает"}
-  - {from: Deliverable, to: DerivationManifest, type: "штампуется"}
-  - {from: Deliverable, to: Workspace, type: "живёт в"}
-  - {from: DeliverableValidator, to: Deliverable, type: "проверяет"}
-  - {from: DeliverableValidator, to: ProvenanceAnchor, type: "разрешает"}
+  - {from: QueryLayer, to: VectorIndex, type: reads, ru: "читает"}
+  - {from: QueryLayer, to: LexicalIndex, type: reads, ru: "читает"}
+  - {from: QueryLayer, to: GraphLayer, type: reads, ru: "расширяет по (PPR)"}
+  - {from: QueryLayer, to: CorpusRegistry, type: reads, ru: "сверяет свежесть"}
+  - {from: QueryLayer, to: ProvenanceAnchor, type: produces, ru: "выдаёт"}
+  - {from: QueryLayer, to: NetworkClient, type: uses, ru: "эмбеддинг вопроса"}
+  - {from: TrendQuery, to: Claim, type: reads, ru: "считает"}
+  - {from: Deliverable, to: DerivationManifest, type: carries, ru: "штампуется"}
+  - {from: Deliverable, to: Workspace, type: stored_in, ru: "живёт в"}
+  - {from: DeliverableValidator, to: Deliverable, type: governs, ru: "проверяет"}
+  - {from: DeliverableValidator, to: ProvenanceAnchor, type: reads, ru: "разрешает"}
+  - {from: QueryLayer, to: DerivationManifest, type: reads, ru: "сверяет свежесть по"}
+  - {from: Deliverable, to: Claim, type: references, ru: "ссылка на улику"}
   # Сквозное
-  - {from: WriterLock, to: Workspace, type: "охраняет"}
+  - {from: WriterLock, to: Workspace, type: governs, ru: "охраняет"}

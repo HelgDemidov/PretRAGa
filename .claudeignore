@@ -15,3 +15,6 @@ __pycache__/
 
 # Serena's own generated index/cache — not its tracked project.yml or memories/.
 .serena/cache/
+
+# Old repo artifacts
+docs/old_repo_audit

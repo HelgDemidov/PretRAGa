@@ -5,23 +5,29 @@ as an explicit design decision).
 
 Check classes (grow as the codebase appears):
   1. map integrity        — delegated to entity_map_build.validate (includes
-                            definitions-required: the map is the ONLY entry
-                            channel for entities, terms and their definitions)
+                            definitions-required and the closed vocabularies:
+                            the map is the ONLY entry channel for entities,
+                            terms, their definitions and their kinds)
   2. generated views      — entity_map.md and entity_glossary.md must equal a
                             fresh render of the map: catches both a forgotten
                             regeneration and a hand edit of a generated file
   3. code anchors         — every `implements` prefix must resolve on disk;
-                            entities without anchors are counted as pending
-                            (informational until src/ exists)
+                            entities whose KIND expects an anchor and has none
+                            are counted as pending (informational until src/
+                            exists). Kinds that forbid anchors are excluded by
+                            classification, not by a per-entity escape hatch
   4. orphan code          — python files under src/ not covered by any anchor
                             (active only when src/ exists)
+  5. kind obligations     — unmet `required` obligations, reported as a named
+                            registry rather than as errors: closing one is a
+                            human design decision, not a repair
 
 Modes:
   (default)          full check, exit 1 on errors
   --quick            same checks, terse output (for the session hook)
   --impact F [F...]  map changed file paths to affected entities (advisory)
 
-Run: .venv/bin/python docs/system_design/entity_map/entity_map_check.py
+Run: .venv/bin/python docs/system_design/design_truth/entity_map_check.py
 """
 from __future__ import annotations
 
@@ -67,12 +73,17 @@ def check_generated_views(data: dict) -> list[str]:
 def check_anchors(data: dict) -> tuple[list[str], list[str]]:
     """Returns (errors, info). Anchors must resolve; unanchored entities are
     pending — informational while src/ does not exist, so early design work
-    is not drowned in noise the checker cannot yet act on."""
+    is not drowned in noise the checker cannot yet act on.
+
+    Which entities owe an anchor is decided by their KIND (`anchor: required`).
+    A glossary term and a human-written data file have no code by definition,
+    so they are never pending — and there is no per-entity opt-out that could
+    be applied in bulk to silence this check."""
     errors: list[str] = []
     pending: list[str] = []
     for e in data["entities"]:
         anchors = e.get("implements")
-        if e.get("code") == "none":
+        if not entity_map_build.anchor_required(data, e):
             continue
         if not anchors:
             pending.append(e["id"])
@@ -125,6 +136,21 @@ def impact(data: dict, changed: list[str]) -> list[str]:
     return lines
 
 
+def check_obligations(data: dict) -> list[str]:
+    """Unmet `required` kind obligations, grouped by what is missing. Never an
+    error: closing one means deciding what an entity is identified by, what
+    invalidates it, or where it lives — a design decision, not a repair."""
+    unmet = entity_map_build.obligations(data)
+    if not unmet:
+        return []
+    by_what: dict[str, list[str]] = {}
+    for eid, _kind, what in unmet:
+        by_what.setdefault(what, []).append(eid)
+    lines = [f"obligations: {len(unmet)} unmet kind obligation(s) — design decisions, not blockers"]
+    lines += [f"obligations: {what} -> {', '.join(ids)}" for what, ids in by_what.items()]
+    return lines
+
+
 def run_checks(data: dict, quick: bool) -> int:
     errors: list[str] = []
     errors += check_map_integrity(data)
@@ -136,6 +162,10 @@ def run_checks(data: dict, quick: bool) -> int:
     anchor_errors, info = check_anchors(data)
     errors += anchor_errors
     errors += check_orphans(data)
+    if not errors:
+        # Obligations read the vocabularies; on a malformed map they would
+        # report cascade noise instead of the actual defect.
+        info += check_obligations(data)
 
     if errors:
         print(f"ENTITY MAP CHECK: {len(errors)} error(s)")

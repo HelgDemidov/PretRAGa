@@ -41,3 +41,43 @@ dev = [
 
 [tool.uv]
 package = false
+
+# Every tool below is configured to discover its own targets from the repository
+# root. The gate command therefore carries NO path list: adding src/ later needs
+# no edit here and no edit to the command, so the two cannot drift apart.
+
+[tool.ruff]
+# `ruff check` with no arguments walks the repo and honours .gitignore.
+target-version = "py312"
+line-length = 110
+
+[tool.mypy]
+# No `files` here on purpose. mypy has no .gitignore support, and an exclude
+# list would be a second, hand-maintained copy of .gitignore that drifts from
+# it. The gate feeds mypy exactly the Python files that would be committed
+# (`git ls-files --cached --others --exclude-standard '*.py'`), so git stays
+# the single source of "what is ours" and src/ needs no edit when it appears.
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.pytest.ini_options]
+# No testpaths: discovery walks the repo, so tests added under src/ or tests/
+# are picked up without editing a hand-maintained list here.
+markers = [
+    "heavy: slow or resource-hungry; excluded from the default gate filter",
+]
+
+[tool.coverage.run]
+# src/ is listed before it exists: coverage warns and carries on, so the day it
+# appears nothing here needs editing.
+source = ["src", "docs/system_design/design_truth"]
+omit = ["*/conftest.py", "*/test_*.py"]
+
+[tool.coverage.report]
+# A floor that catches regressions, not a goal. Measured with exactly the gate
+# command; raise it on organic growth only. The checker's real coverage is
+# higher than measured — its tests drive it as a subprocess, which coverage
+# does not see from the parent process.
+fail_under = 70
+show_missing = true

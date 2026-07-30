@@ -4,9 +4,131 @@
 `entity_map.yaml` скриптом `entity_map_build.py` — руками не править:
 источник истины карты — YAML, у файла один писатель (генератор).
 Проверки целостности графа (висячие связи, изолированные сущности,
-плейсхолдеры без триггера) выполняются при каждой генерации.
+плейсхолдеры без триггера, словарные значения, обязательства пород)
+выполняются при каждой генерации.
 
-Сущностей: 39; связей: 74; атрибутов: 115 (✅ зафиксировано: 84; ⬜ плейсхолдер: 22; 🔧 выбор реализации: 5; ⏩ отложено: 4).
+Сущностей: 39 в 7 породах; связей: 85 в 14 типах; атрибутов: 114 (✅ зафиксировано: 83; ⬜ плейсхолдер: 22; 🔧 выбор реализации: 5; ⏩ отложено: 4); открытых обязательств: 20.
+
+## Словари карты
+
+Закрытые словари: значение вне словаря — ошибка, новое значение — запись
+в `entity_map.yaml`, а не правка скриптов.
+
+### Породы сущностей и их обязательства
+
+| Порода | Смысл | Якорь | Идентичность | Версия | Размещение | Вмещает | Атрибуты | Сущностей |
+|---|---|---|---|---|---|---|---|---|
+| `data` (данные) | хранимое с собственной схемой; получит pydantic-модель и дифф с ней | required | required | optional | required | optional | required | 13 |
+| `derived` (производное) | восстановимо из источника, назад не пишет; инвалидируется версией | required | optional | required | required | optional | required | 7 |
+| `process` (процесс) | поведение; своего хранения не имеет | required | forbidden | optional | forbidden | optional | required | 12 |
+| `store` (хранилище) | носитель хранения; цель связей размещения | required | optional | optional | optional | required | required | 3 |
+| `data_file` (файл данных (человек)) | человеко-писаный файл значений; кода не имеет, валидируется в CI | forbidden | forbidden | optional | forbidden | optional | required | 2 |
+| `extension` (запись расширения) | запись таблицы расширений; новая разновидность — запись, а не правка ядра | required | forbidden | required | forbidden | optional | required | 1 |
+| `term` (термин) | статья словаря без собственного носителя: ни кода, ни атрибутов | forbidden | forbidden | optional | forbidden | optional | forbidden | 1 |
+
+- `data` — AcquisitionChannel, AcquisitionAct, RawPayload, Document, ContentVersion, CanonicalText, ConversionRecord, ProvenanceAnchor, Claim, TypedReference, WorldEntity, DerivationManifest, Deliverable
+- `derived` — AcquisitionHint, Fragment, Translation, GraphLayer, VerbalizedGraphContext, VectorIndex, LexicalIndex
+- `process` — AdmissionMinimum, Triage, Deduplication, MergeOperation, Enrichment, ExceptionQueue, Reconciliation, QueryLayer, TrendQuery, DeliverableValidator, NetworkClient, WriterLock
+- `store` — CorpusRegistry, MachineStore, Workspace
+- `data_file` — ControlledVocabulary, AuthorityRuleTable
+- `extension` — Connector
+- `term` — Corpus
+
+### Типы связей
+
+| Тип | Метка по умолчанию | Класс | Обратный к | Связей |
+|---|---|---|---|---|
+| `instance_of` | экземпляр типа | `reference` | — | 1 |
+| `composed_of` | состоит из | `composition` | — | 1 |
+| `carries` | несёт | `composition` | — | 5 |
+| `references` | ссылается на | `reference` | — | 9 |
+| `classified_by` | классифицируется по | `reference` | — | 4 |
+| `produces` | производит | `production` | — | 15 |
+| `produced_by` | произведён по | `production` | `produces` | 1 |
+| `derived_from` | производится из | `production` | `produces` | 9 |
+| `feeds` | питает | `production` | — | 5 |
+| `stored_in` | хранится в | `placement` | — | 11 |
+| `uses` | вызывает | `dependency` | — | 3 |
+| `consumes` | берёт на вход | `dependency` | — | 1 |
+| `reads` | читает | `dependency` | — | 11 |
+| `governs` | управляет | `governance` | — | 9 |
+
+Классы связей: `composition` — владение: A состоит из B, жизненные циклы связаны; `reference` — ссылка: A указывает на B, без владения; `production` — производство: A порождает B; `placement` — размещение: A хранится в B; `dependency` — зависимость: A нужен B, чтобы работать; `governance` — управление: A решает, проверяет или ограничивает B.
+
+Записаны в обратную сторону относительно канонической: 10 связей из 85 (типы `produced_by`, `derived_from`). Потребитель, которому важно направление, нормализует их по `inverse_of` — переориентировать карту руками не требуется.
+
+### Триггеры решений
+
+| Триггер | Событие | Плейсхолдеров ждёт |
+|---|---|---|
+| `acquisition_spec` | спецификация добычи | 5 |
+| `ingest_spec` | спецификация ингеста | 4 |
+| `conversion_spec` | спецификация конвертации | 1 |
+| `enrichment_spec` | спецификация обогащения | 10 |
+| `synthesis_workshop_spec` | спецификация мастерской синтеза | 1 |
+| `first_vocabulary_consumer_spec` | первая спецификация, использующая словарь | 1 |
+
+## Слои и направление зависимости
+
+Порядок записи слоёв — и есть контракт: слой вправе зависеть от лежащего
+ниже и от своего собственного, зависимость вверх — ошибка сборки. Слои —
+не группы: группа отвечает «про что это», слой — «кто от кого вправе
+зависеть». Ограничен только класс `dependency`; `governance` не ограничен
+намеренно — там направление ребра не совпадает с направлением зависимости кода.
+
+| # | Слой | Сущностей | Состав |
+|---|---|---|---|
+| 0 | Мастерская синтеза (`synthesis`) | 2 | Deliverable, DeliverableValidator |
+| 1 | Слой запросов (`query`) | 2 | QueryLayer, TrendQuery |
+| 2 | Обогащение (`enrichment`) | 10 | Fragment, Translation, Claim, TypedReference, WorldEntity, GraphLayer, VerbalizedGraphContext, VectorIndex, LexicalIndex, Enrichment |
+| 3 | Триаж и дедупликация (`curation`) | 4 | Triage, Deduplication, MergeOperation, ExceptionQueue |
+| 4 | Реестр корпуса (`registry`) | 4 | Document, CorpusRegistry, Corpus, AdmissionMinimum |
+| 5 | Конвертация (`conversion`) | 4 | ContentVersion, CanonicalText, ConversionRecord, ProvenanceAnchor |
+| 6 | Добыча (`acquisition`) | 5 | Connector, AcquisitionChannel, AcquisitionAct, RawPayload, AcquisitionHint |
+| 7 | Сквозное основание (`foundation`) | 8 | ControlledVocabulary, AuthorityRuleTable, MachineStore, DerivationManifest, Workspace, Reconciliation, NetworkClient, WriterLock |
+
+```mermaid
+flowchart TD
+    synthesis["0 — Мастерская синтеза"]
+    query["1 — Слой запросов"]
+    enrichment["2 — Обогащение"]
+    curation["3 — Триаж и дедупликация"]
+    registry["4 — Реестр корпуса"]
+    conversion["5 — Конвертация"]
+    acquisition["6 — Добыча"]
+    foundation["7 — Сквозное основание"]
+    acquisition -- "1" --> foundation
+    conversion -- "1" --> acquisition
+    enrichment -- "1" --> foundation
+    curation -- "1" --> acquisition
+    curation -- "1" --> conversion
+    enrichment -- "1" --> conversion
+    enrichment -- "1" --> enrichment
+    query -- "4" --> enrichment
+    query -- "1" --> registry
+    query -- "2" --> foundation
+    synthesis -- "1" --> conversion
+```
+
+Связей класса `dependency`: 15 из 85. Все они:
+
+| Связь | Из слоя | В слой | Вниз по стеку |
+|---|---|---|---|
+| AcquisitionAct → NetworkClient (`uses`) | acquisition | foundation | да |
+| ConversionRecord → RawPayload (`consumes`) | conversion | acquisition | да |
+| Enrichment → NetworkClient (`uses`) | enrichment | foundation | да |
+| Triage → RawPayload (`reads`) | curation | acquisition | да |
+| Triage → CanonicalText (`reads`) | curation | conversion | да |
+| Enrichment → ContentVersion (`reads`) | enrichment | conversion | да |
+| Enrichment → Fragment (`reads`) | enrichment | enrichment | свой слой |
+| QueryLayer → VectorIndex (`reads`) | query | enrichment | да |
+| QueryLayer → LexicalIndex (`reads`) | query | enrichment | да |
+| QueryLayer → GraphLayer (`reads`) | query | enrichment | да |
+| QueryLayer → CorpusRegistry (`reads`) | query | registry | да |
+| QueryLayer → NetworkClient (`uses`) | query | foundation | да |
+| TrendQuery → Claim (`reads`) | query | enrichment | да |
+| DeliverableValidator → ProvenanceAnchor (`reads`) | synthesis | conversion | да |
+| QueryLayer → DerivationManifest (`reads`) | query | foundation | да |
 
 ## Сводная межгрупповая схема
 
@@ -23,20 +145,21 @@ flowchart LR
     cross_cutting["Сквозное"]
     acquisition -- "1" --> content
     acquisition -- "1" --> cross_cutting
-    content -- "2" --> acquisition
-    content -- "2" --> storage
+    content -- "3" --> acquisition
+    content -- "3" --> storage
     content -- "1" --> facts_graph
     facts_graph -- "5" --> content
     facts_graph -- "1" --> acquisition
     facts_graph -- "3" --> storage
     acquisition -- "2" --> storage
     storage -- "2" --> content
-    processes -- "4" --> content
+    processes -- "7" --> content
     processes -- "4" --> facts_graph
     processes -- "2" --> storage
     processes -- "1" --> cross_cutting
-    query_synthesis -- "5" --> storage
-    query_synthesis -- "2" --> facts_graph
+    processes -- "1" --> acquisition
+    query_synthesis -- "6" --> storage
+    query_synthesis -- "3" --> facts_graph
     query_synthesis -- "2" --> content
     query_synthesis -- "1" --> cross_cutting
     cross_cutting -- "1" --> storage
@@ -65,6 +188,7 @@ flowchart LR
     TypedReference(["Типизированная ссылка"])
     Workspace(["Рабочее пространство"])
     MachineStore(["Машинное хранилище"])
+    Triage(["Триаж"])
     AcquisitionChannel -- "экземпляр типа" --> Connector
     AcquisitionChannel -- "порождает" --> AcquisitionAct
     AcquisitionAct -- "приносит" --> RawPayload
@@ -73,9 +197,11 @@ flowchart LR
     AcquisitionHint -- "питает пере-наполнение" --> AcquisitionChannel
     ContentVersion -- "payload" --> RawPayload
     ConversionRecord -- "из сырья" --> RawPayload
+    Document -- "провенанс канала" --> AcquisitionChannel
     TypedReference -- "висячая порождает" --> AcquisitionHint
     RawPayload -- "живёт в" --> Workspace
     AcquisitionAct -- "хранится в" --> MachineStore
+    Triage -- "судит после скачивания" --> RawPayload
 ```
 
 ### Документ и содержимое
@@ -96,6 +222,7 @@ flowchart LR
     CorpusRegistry(["Реестр корпуса"])
     ControlledVocabulary(["Контролируемый словарь"])
     AuthorityRuleTable(["Таблица авторитетности"])
+    AcquisitionChannel(["Канал добычи"])
     Claim(["Утверждение"])
     TypedReference(["Типизированная ссылка"])
     GraphLayer(["Граф"])
@@ -121,6 +248,8 @@ flowchart LR
     Document -- "записан в" --> CorpusRegistry
     Document -- "классифицируется по" --> ControlledVocabulary
     AuthorityRuleTable -- "вычисляет класс" --> Document
+    Document -- "провенанс канала" --> AcquisitionChannel
+    ProvenanceAnchor -- "версия в тройке" --> ContentVersion
     Claim -- "заякорено" --> ProvenanceAnchor
     TypedReference -- "связывает документы" --> Document
     TypedReference -- "якорь текстовой находки" --> ProvenanceAnchor
@@ -128,10 +257,14 @@ flowchart LR
     ConversionRecord -- "хранится в" --> MachineStore
     VectorIndex -- "индексирует" --> Fragment
     LexicalIndex -- "индексирует" --> CanonicalText
+    ProvenanceAnchor -- "хранится в" --> MachineStore
     AdmissionMinimum -- "ворота приёмки" --> Document
     Triage -- "выносит вердикт" --> Document
     MergeOperation -- "объединяет" --> Document
     Enrichment -- "производит" --> Translation
+    Triage -- "и после конвертации" --> CanonicalText
+    Enrichment -- "единица пере-деривации" --> ContentVersion
+    Enrichment -- "единица дорогого перерасчёта" --> Fragment
     QueryLayer -- "выдаёт" --> ProvenanceAnchor
     DeliverableValidator -- "разрешает" --> ProvenanceAnchor
 ```
@@ -158,6 +291,7 @@ flowchart LR
     Enrichment(["Обогащение"])
     QueryLayer(["Слой запросов"])
     TrendQuery(["Запрос тренда"])
+    Deliverable(["Деливерабл"])
     Document -- "классифицируется по" --> ControlledVocabulary
     AuthorityRuleTable -- "вычисляет класс" --> Document
     Claim -- "заякорено" --> ProvenanceAnchor
@@ -182,6 +316,7 @@ flowchart LR
     Enrichment -- "строит" --> GraphLayer
     QueryLayer -- "расширяет по (PPR)" --> GraphLayer
     TrendQuery -- "считает" --> Claim
+    Deliverable -- "ссылка на улику" --> Claim
 ```
 
 ### Реестр и хранение
@@ -206,6 +341,7 @@ flowchart LR
     Fragment(["Фрагмент"])
     CanonicalText(["Канонический текст"])
     GraphLayer(["Граф"])
+    ProvenanceAnchor(["Якорь провенанса"])
     Enrichment(["Обогащение"])
     QueryLayer(["Слой запросов"])
     Deliverable(["Деливерабл"])
@@ -225,6 +361,9 @@ flowchart LR
     LexicalIndex -- "несёт" --> DerivationManifest
     GraphLayer -- "несёт" --> DerivationManifest
     DerivationManifest -- "коммит реестра" --> CorpusRegistry
+    ProvenanceAnchor -- "хранится в" --> MachineStore
+    VectorIndex -- "живёт в" --> Workspace
+    LexicalIndex -- "живёт в" --> Workspace
     Enrichment -- "строит" --> VectorIndex
     Enrichment -- "строит" --> LexicalIndex
     QueryLayer -- "читает" --> VectorIndex
@@ -232,6 +371,7 @@ flowchart LR
     QueryLayer -- "сверяет свежесть" --> CorpusRegistry
     Deliverable -- "штампуется" --> DerivationManifest
     Deliverable -- "живёт в" --> Workspace
+    QueryLayer -- "сверяет свежесть по" --> DerivationManifest
     WriterLock -- "охраняет" --> Workspace
 ```
 
@@ -257,6 +397,10 @@ flowchart LR
     LexicalIndex(["Лексический индекс"])
     GraphLayer(["Граф"])
     NetworkClient(["Сетевой клиент"])
+    RawPayload(["Сырой payload"])
+    CanonicalText(["Канонический текст"])
+    ContentVersion(["Версия содержимого"])
+    Fragment(["Фрагмент"])
     AdmissionMinimum -- "ворота приёмки" --> Document
     Triage -- "выносит вердикт" --> Document
     Triage -- "направляет" --> ExceptionQueue
@@ -274,6 +418,10 @@ flowchart LR
     Reconciliation -- "пере-триаж" --> Triage
     Reconciliation -- "пере-предлагает" --> Deduplication
     Reconciliation -- "правит" --> Enrichment
+    Triage -- "судит после скачивания" --> RawPayload
+    Triage -- "и после конвертации" --> CanonicalText
+    Enrichment -- "единица пере-деривации" --> ContentVersion
+    Enrichment -- "единица дорогого перерасчёта" --> Fragment
 ```
 
 ### Запросы и синтез
@@ -306,6 +454,8 @@ flowchart LR
     Deliverable -- "живёт в" --> Workspace
     DeliverableValidator -- "проверяет" --> Deliverable
     DeliverableValidator -- "разрешает" --> ProvenanceAnchor
+    QueryLayer -- "сверяет свежесть по" --> DerivationManifest
+    Deliverable -- "ссылка на улику" --> Claim
 ```
 
 ### Сквозное
@@ -401,6 +551,8 @@ flowchart LR
     Document -- "записан в" --> CorpusRegistry
     Document -- "классифицируется по" --> ControlledVocabulary
     AuthorityRuleTable -- "вычисляет класс" --> Document
+    Document -- "провенанс канала" --> AcquisitionChannel
+    ProvenanceAnchor -- "версия в тройке" --> ContentVersion
     Claim -- "заякорено" --> ProvenanceAnchor
     Claim -- "упоминает" --> WorldEntity
     Claim -- "темы и предикаты из" --> ControlledVocabulary
@@ -428,6 +580,9 @@ flowchart LR
     LexicalIndex -- "несёт" --> DerivationManifest
     GraphLayer -- "несёт" --> DerivationManifest
     DerivationManifest -- "коммит реестра" --> CorpusRegistry
+    ProvenanceAnchor -- "хранится в" --> MachineStore
+    VectorIndex -- "живёт в" --> Workspace
+    LexicalIndex -- "живёт в" --> Workspace
     AdmissionMinimum -- "ворота приёмки" --> Document
     Triage -- "выносит вердикт" --> Document
     Triage -- "направляет" --> ExceptionQueue
@@ -445,6 +600,10 @@ flowchart LR
     Reconciliation -- "пере-триаж" --> Triage
     Reconciliation -- "пере-предлагает" --> Deduplication
     Reconciliation -- "правит" --> Enrichment
+    Triage -- "судит после скачивания" --> RawPayload
+    Triage -- "и после конвертации" --> CanonicalText
+    Enrichment -- "единица пере-деривации" --> ContentVersion
+    Enrichment -- "единица дорогого перерасчёта" --> Fragment
     QueryLayer -- "читает" --> VectorIndex
     QueryLayer -- "читает" --> LexicalIndex
     QueryLayer -- "расширяет по (PPR)" --> GraphLayer
@@ -456,6 +615,8 @@ flowchart LR
     Deliverable -- "живёт в" --> Workspace
     DeliverableValidator -- "проверяет" --> Deliverable
     DeliverableValidator -- "разрешает" --> ProvenanceAnchor
+    QueryLayer -- "сверяет свежесть по" --> DerivationManifest
+    Deliverable -- "ссылка на улику" --> Claim
     WriterLock -- "охраняет" --> Workspace
 ```
 
@@ -466,21 +627,21 @@ flowchart LR
 | Сущность | Атрибут | Статус | Примечание / триггер |
 |---|---|---|---|
 | Коннектор (Connector) | type_name | ✅ зафиксировано | имя типа — идентичность |
-| Коннектор (Connector) | entry_version | ✅ зафиксировано | версия записи; бамп инвалидирует её продукцию |
+| Коннектор (Connector) | entry_version | ✅ зафиксировано | версия записи; бамп инвалидирует её продукцию — **version** |
 | Коннектор (Connector) | contract_full_view | ✅ зафиксировано | адаптер отдаёт полный срез; ядро не хранит состояние адаптера |
-| Канал добычи (AcquisitionChannel) | id | ✅ зафиксировано | маленький иммутабельный id — для провенанса |
+| Канал добычи (AcquisitionChannel) | id | ✅ зафиксировано | маленький иммутабельный id — для провенанса — **identity** |
 | Канал добычи (AcquisitionChannel) | connector_type | ✅ зафиксировано | ссылка на запись расширения |
 | Канал добычи (AcquisitionChannel) | config | ✅ зафиксировано | нормализуема — для дедупликации каналов |
 | Канал добычи (AcquisitionChannel) | schedule_periodicity | ✅ зафиксировано | заявленная периодичность опроса |
-| Канал добычи (AcquisitionChannel) | declared_coverage | ⬜ плейсхолдер | юрисдикции/тематики/типы — состав не расписан — триггер: спецификация добычи |
-| Канал добычи (AcquisitionChannel) | homogeneity_declarations | ⬜ плейсхолдер | по каким атрибутам канал гомогенен — триггер: спецификация добычи |
-| Канал добычи (AcquisitionChannel) | gate0_rules | ⬜ плейсхолдер | детерминированная гигиена входа — триггер: спецификация добычи |
-| Канал добычи (AcquisitionChannel) | lifecycle_states | ⬜ плейсхолдер | retire-not-delete зафиксирован; полный список состояний — нет — триггер: спецификация добычи |
+| Канал добычи (AcquisitionChannel) | declared_coverage | ⬜ плейсхолдер | юрисдикции/тематики/типы — состав не расписан — триггер: `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | homogeneity_declarations | ⬜ плейсхолдер | по каким атрибутам канал гомогенен — триггер: `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | gate0_rules | ⬜ плейсхолдер | детерминированная гигиена входа — триггер: `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | lifecycle_states | ⬜ плейсхолдер | retire-not-delete зафиксирован; полный список состояний — нет — триггер: `acquisition_spec` |
 | Канал добычи (AcquisitionChannel) | fetch_state | ✅ зафиксировано | курсоры/ошибки/карантин — отдельный машинный артефакт |
 | Акт добычи (AcquisitionAct) | channel_ref | ✅ зафиксировано |  |
 | Акт добычи (AcquisitionAct) | occurred_at | ✅ зафиксировано |  |
-| Акт добычи (AcquisitionAct) | record_fields | ⬜ плейсхолдер | полный состав записи журнала — триггер: спецификация добычи |
-| Сырой payload (RawPayload) | content_hash | ✅ зафиксировано | контент-адресация |
+| Акт добычи (AcquisitionAct) | record_fields | ⬜ плейсхолдер | полный состав записи журнала — триггер: `acquisition_spec` |
+| Сырой payload (RawPayload) | content_hash | ✅ зафиксировано | контент-адресация — **identity** |
 | Сырой payload (RawPayload) | file_store | ✅ зафиксировано | контент-адресованные файлы, вне БД — веб гниёт |
 | Сырой payload (RawPayload) | retained_for_rejected | ✅ зафиксировано | хранится и для отвергнутых |
 | Сырой payload (RawPayload) | retention_policy | ⏩ отложено | ручка очистки по сроку — пост-MVP |
@@ -490,56 +651,56 @@ flowchart LR
 
 | Сущность | Атрибут | Статус | Примечание / триггер |
 |---|---|---|---|
-| Документ (Document) | uuid | ✅ зафиксировано | чеканный, класса UUIDv7, на стадии кандидата |
+| Документ (Document) | uuid | ✅ зафиксировано | чеканный, класса UUIDv7, на стадии кандидата — **identity** |
 | Документ (Document) | origin_coordinates | ✅ зафиксировано | пары схема+значение (ELI/CELEX/реестр/URL) |
-| Документ (Document) | coordinate_scheme_whitelist | ⬜ плейсхолдер | какие схемы дают авто-склейку; URL — никогда — триггер: спецификация ингеста |
+| Документ (Document) | coordinate_scheme_whitelist | ⬜ плейсхолдер | какие схемы дают авто-склейку; URL — никогда — триггер: `ingest_spec` |
 | Документ (Document) | lifecycle | ✅ зафиксировано | кандидат → активен → выведен; закрытое множество |
 | Документ (Document) | classification_attributes | ✅ зафиксировано | издатель, тип, юрисдикция, уровень, обязательность, язык, тематики — машинные, словарные |
 | Документ (Document) | authority_class | ✅ зафиксировано | вычисляется таблицей правил, не хранится |
 | Документ (Document) | completeness_score | ✅ зафиксировано | машинный счётчик полноты метаданных |
-| Документ (Document) | completeness_formula | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Документ (Document) | completeness_formula | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 | Документ (Document) | channel_ref | ✅ зафиксировано |  |
 | Документ (Document) | act_ref | ✅ зафиксировано |  |
-| Версия содержимого (ContentVersion) | key | ✅ зафиксировано | двухосный ключ (язык, редакция) |
+| Версия содержимого (ContentVersion) | key | ✅ зафиксировано | двухосный ключ (язык, редакция) — **identity** |
 | Версия содержимого (ContentVersion) | payload_ref | ✅ зафиксировано |  |
-| Канонический текст (CanonicalText) | content_hash | ✅ зафиксировано |  |
+| Канонический текст (CanonicalText) | content_hash | ✅ зафиксировано | **identity** |
 | Канонический текст (CanonicalText) | format | ✅ зафиксировано | Markdown — единственный носитель; острова: таблицы, mermaid (проверка рендером) |
-| Запись конвертации (ConversionRecord) | converter_entry_version | ✅ зафиксировано | второе звено провенанса |
-| Запись конвертации (ConversionRecord) | record_fields | ⬜ плейсхолдер | триггер: спецификация конвертации |
-| Якорь провенанса (ProvenanceAnchor) | triple | ✅ зафиксировано | (версия содержимого, хэш канонического текста, символьный интервал) |
+| Запись конвертации (ConversionRecord) | converter_entry_version | ✅ зафиксировано | второе звено провенанса — **version** |
+| Запись конвертации (ConversionRecord) | record_fields | ⬜ плейсхолдер | триггер: `conversion_spec` |
+| Якорь провенанса (ProvenanceAnchor) | triple | ✅ зафиксировано | (версия содержимого, хэш канонического текста, символьный интервал) — **identity** |
 | Якорь провенанса (ProvenanceAnchor) | original_only | ✅ зафиксировано | якоря только в оригинале, не в переводах |
 | Фрагмент (Fragment) | span | ✅ зафиксировано |  |
-| Фрагмент (Fragment) | chunker_version | ✅ зафиксировано | пересоздаваем; долгоживущие ссылки на фрагменты запрещены |
+| Фрагмент (Fragment) | chunker_version | ✅ зафиксировано | пересоздаваем; долгоживущие ссылки на фрагменты запрещены — **version** |
 | Перевод (Translation) | lens_only | ✅ зафиксировано | линза для чтения/эмбеддинга; не носитель якорей |
-| Перевод (Translation) | caching_detail | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Перевод (Translation) | caching_detail | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 
 ### Факты и граф
 
 | Сущность | Атрибут | Статус | Примечание / триггер |
 |---|---|---|---|
-| Утверждение (Claim) | identity | ✅ зафиксировано | производна от (якорь, нормализованное содержание) |
+| Утверждение (Claim) | identity | ✅ зафиксировано | производна от (якорь, нормализованное содержание) — **identity** |
 | Утверждение (Claim) | anchor_required | ✅ зафиксировано | валидация на входе; без якоря непредставимо |
 | Утверждение (Claim) | spo_structure | ✅ зафиксировано | опциональная тройка субъект-предикат-объект — ребро графа |
-| Утверждение (Claim) | predicate_vocabulary | ⬜ плейсхолдер | малый словарь предикатов — триггер: спецификация обогащения |
-| Утверждение (Claim) | temporal_reference | ⬜ плейсхолдер | о каком времени говорит утверждение — триггер: спецификация обогащения |
+| Утверждение (Claim) | predicate_vocabulary | ⬜ плейсхолдер | малый словарь предикатов — триггер: `enrichment_spec` |
+| Утверждение (Claim) | temporal_reference | ⬜ плейсхолдер | о каком времени говорит утверждение — триггер: `enrichment_spec` |
 | Утверждение (Claim) | provenance_label | ✅ зафиксировано | deterministic / inferred / human-curated |
-| Утверждение (Claim) | extractor_version | ✅ зафиксировано |  |
+| Утверждение (Claim) | extractor_version | ✅ зафиксировано | **version** |
 | Утверждение (Claim) | semantics | ✅ зафиксировано | позиция документа, не истина о мире |
 | Типизированная ссылка (TypedReference) | base_types | ✅ зафиксировано | cites/amends/implements/supersedes — база ELI |
-| Типизированная ссылка (TypedReference) | full_type_vocabulary | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Типизированная ссылка (TypedReference) | full_type_vocabulary | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 | Типизированная ссылка (TypedReference) | source | ✅ зафиксировано | payload коннектора | идентификатор в тексте (с якорем) |
-| Сущность мира (WorldEntity) | normalization_table | ⬜ плейсхолдер | открытый пункт: разрешение сущностей — триггер: спецификация обогащения |
+| Сущность мира (WorldEntity) | normalization_table | ⬜ плейсхолдер | открытый пункт: разрешение сущностей — триггер: `enrichment_spec` |
 | Контролируемый словарь (ControlledVocabulary) | mechanism | ✅ зафиксировано | внешний словарь, CI-валидация, код не ветвится |
-| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | ⬜ плейсхолдер | составы: издатели, типы, юрисдикции, уровни, обязательность, тематики, предикаты, типы ссылок, типы узлов — триггер: первая спецификация, использующая словарь |
+| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | ⬜ плейсхолдер | составы: издатели, типы, юрисдикции, уровни, обязательность, тематики, предикаты, типы ссылок, типы узлов — триггер: `first_vocabulary_consumer_spec` |
 | Таблица авторитетности (AuthorityRuleTable) | mechanism | ✅ зафиксировано | (издатель, тип, обязательность, уровень) → класс |
-| Таблица авторитетности (AuthorityRuleTable) | table_content | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Таблица авторитетности (AuthorityRuleTable) | table_content | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 | Граф (GraphLayer) | node_types | ✅ зафиксировано | работы, сущности мира, темы |
 | Граф (GraphLayer) | projections | ✅ зафиксировано | мультиструктурность — проекции по типам рёбер |
 | Граф (GraphLayer) | communities | ✅ зафиксировано | кластеризация Leiden-класса на проекциях; метка inferred; навигация, не факты |
-| Граф (GraphLayer) | meta_hierarchy | ⬜ плейсхолдер | словарь типов узлов + предикатов + посев нормализации — триггер: спецификация обогащения |
+| Граф (GraphLayer) | meta_hierarchy | ⬜ плейсхолдер | словарь типов узлов + предикатов + посев нормализации — триггер: `enrichment_spec` |
 | Граф (GraphLayer) | community_summaries | ⏩ отложено | сводки сообществ — этап 2 |
 | Словесная обвязка (VerbalizedGraphContext) | mechanism | ✅ зафиксировано | граф входит в вектора через текст; вход эмбеддера ≠ заякоренный текст |
-| Словесная обвязка (VerbalizedGraphContext) | template | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Словесная обвязка (VerbalizedGraphContext) | template | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 
 ### Реестр и хранение
 
@@ -547,7 +708,7 @@ flowchart LR
 |---|---|---|---|
 | Реестр корпуса (CorpusRegistry) | record_machine | ✅ зафиксировано | машинная запись; человек не правит |
 | Реестр корпуса (CorpusRegistry) | overrides_human | ✅ зафиксировано | разреженные поправки — единственная ручная поверхность; бьют машинное |
-| Реестр корпуса (CorpusRegistry) | record_schema | ⬜ плейсхолдер | триггер: спецификация ингеста |
+| Реестр корпуса (CorpusRegistry) | record_schema | ⬜ плейсхолдер | триггер: `ingest_spec` |
 | Реестр корпуса (CorpusRegistry) | storage_boundary | ✅ зафиксировано | членство и жизненный цикл → git; ход обработки → машинное хранилище |
 | Машинное хранилище (MachineStore) | role | ✅ зафиксировано | встраиваемое, бессерверное, табличное |
 | Машинное хранилище (MachineStore) | engine | 🔧 выбор реализации | выбор измерением; наследник старого проекта — кандидат, не победитель |
@@ -556,8 +717,7 @@ flowchart LR
 | Лексический индекс (LexicalIndex) | role | ✅ зафиксировано | локальный, BM25-класса — точность по идентификаторам и числам |
 | Лексический индекс (LexicalIndex) | engine | 🔧 выбор реализации |  |
 | Манифест деривации (DerivationManifest) | registry_commit | ✅ зафиксировано |  |
-| Манифест деривации (DerivationManifest) | derivation_versions | ✅ зафиксировано | версии экстракторов/модели эмбеддинга/параметров входа |
-| Корпус (Corpus) | definition | ✅ зафиксировано | все активные документы реестра; без id и конфигурации |
+| Манифест деривации (DerivationManifest) | derivation_versions | ✅ зафиксировано | версии экстракторов/модели эмбеддинга/параметров входа — **version** |
 | Рабочее пространство (Workspace) | separate_git | ✅ зафиксировано | свой git; всегда отдельно от репозитория кода |
 
 ### Процессы
@@ -565,11 +725,11 @@ flowchart LR
 | Сущность | Атрибут | Статус | Примечание / триггер |
 |---|---|---|---|
 | Минимум приёмки (AdmissionMinimum) | mechanism | ✅ зафиксировано | одна функция: загрузчик падает, валидатор собирает; версионируема |
-| Минимум приёмки (AdmissionMinimum) | composition | ⬜ плейсхолдер | главный открытый пункт — триггер: не позже проектирования ингеста |
+| Минимум приёмки (AdmissionMinimum) | composition | ⬜ плейсхолдер | главный открытый пункт — триггер: `ingest_spec` |
 | Триаж (Triage) | full_evidence | ✅ зафиксировано | после скачивания и конвертации |
 | Триаж (Triage) | verdict_with_reason | ✅ зафиксировано | вердикт останавливает продвижение; удаления не существует |
 | Триаж (Triage) | rules_then_llm | ✅ зафиксировано | сначала правила, дешёвая модель где правил мало |
-| Триаж (Triage) | ruleset | ⬜ плейсхолдер | триггер: спецификация ингеста |
+| Триаж (Triage) | ruleset | ⬜ плейсхолдер | триггер: `ingest_spec` |
 | Дедупликация (Deduplication) | point1_deterministic | ✅ зафиксировано | на входе, автоматически: хэш payload + белый список схем |
 | Дедупликация (Deduplication) | point2_fuzzy | ✅ зафиксировано | после приёмки, только предложения: близость векторов + названия |
 | Дедупликация (Deduplication) | asymmetry | ✅ зафиксировано | ложная склейка хуже пропущенной |
@@ -579,7 +739,7 @@ flowchart LR
 | Обогащение (Enrichment) | two_level_incrementality | ✅ зафиксировано | пере-деривация — версия; дорогой перерасчёт — фрагмент |
 | Обогащение (Enrichment) | language_routing | ✅ зафиксировано | экстрактор — запись расширения с ключом по языку; региональная модель — кандидат для черногорского |
 | Очередь исключений (ExceptionQueue) | concept | ✅ зафиксировано | неуверенные извлечения и неоднозначные склейки — человеку |
-| Очередь исключений (ExceptionQueue) | detail | ⬜ плейсхолдер | триггер: спецификация обогащения |
+| Очередь исключений (ExceptionQueue) | detail | ⬜ плейсхолдер | триггер: `enrichment_spec` |
 | Реконсиляция (Reconciliation) | level_triggered | ✅ зафиксировано | работа от состояния мира; повторный прогон — пустая операция; чинит историю |
 | Реконсиляция (Reconciliation) | item_isolation_breaker | ✅ зафиксировано | отказ элемента не роняет батч; порог аварийности прерывает прогон |
 | Реконсиляция (Reconciliation) | checkpoints_idempotent | ✅ зафиксировано |  |
@@ -600,7 +760,7 @@ flowchart LR
 | Деливерабл (Deliverable) | stamp | ✅ зафиксировано | манифест деривации |
 | Деливерабл (Deliverable) | parameter_matrix | ✅ зафиксировано | семейства вариантов над явной матрицей параметров |
 | Валидатор деливерабла (DeliverableValidator) | mechanism | ✅ зафиксировано | каждое утверждение → разрешимая ссылка на якорь; иначе пометка «суждение автора» или удаление |
-| Валидатор деливерабла (DeliverableValidator) | check_rules | ⬜ плейсхолдер | триггер: спецификация мастерской синтеза |
+| Валидатор деливерабла (DeliverableValidator) | check_rules | ⬜ плейсхолдер | триггер: `synthesis_workshop_spec` |
 
 ### Сквозное
 
@@ -619,25 +779,55 @@ flowchart LR
 
 | Сущность | Атрибут-плейсхолдер | Триггер решения |
 |---|---|---|
-| Канал добычи (AcquisitionChannel) | declared_coverage | спецификация добычи |
-| Канал добычи (AcquisitionChannel) | homogeneity_declarations | спецификация добычи |
-| Канал добычи (AcquisitionChannel) | gate0_rules | спецификация добычи |
-| Канал добычи (AcquisitionChannel) | lifecycle_states | спецификация добычи |
-| Акт добычи (AcquisitionAct) | record_fields | спецификация добычи |
-| Документ (Document) | coordinate_scheme_whitelist | спецификация ингеста |
-| Документ (Document) | completeness_formula | спецификация обогащения |
-| Запись конвертации (ConversionRecord) | record_fields | спецификация конвертации |
-| Перевод (Translation) | caching_detail | спецификация обогащения |
-| Утверждение (Claim) | predicate_vocabulary | спецификация обогащения |
-| Утверждение (Claim) | temporal_reference | спецификация обогащения |
-| Типизированная ссылка (TypedReference) | full_type_vocabulary | спецификация обогащения |
-| Сущность мира (WorldEntity) | normalization_table | спецификация обогащения |
-| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | первая спецификация, использующая словарь |
-| Таблица авторитетности (AuthorityRuleTable) | table_content | спецификация обогащения |
-| Граф (GraphLayer) | meta_hierarchy | спецификация обогащения |
-| Словесная обвязка (VerbalizedGraphContext) | template | спецификация обогащения |
-| Реестр корпуса (CorpusRegistry) | record_schema | спецификация ингеста |
-| Минимум приёмки (AdmissionMinimum) | composition | не позже проектирования ингеста |
-| Триаж (Triage) | ruleset | спецификация ингеста |
-| Очередь исключений (ExceptionQueue) | detail | спецификация обогащения |
-| Валидатор деливерабла (DeliverableValidator) | check_rules | спецификация мастерской синтеза |
+| Канал добычи (AcquisitionChannel) | declared_coverage | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | homogeneity_declarations | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | gate0_rules | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | lifecycle_states | `acquisition_spec` |
+| Акт добычи (AcquisitionAct) | record_fields | `acquisition_spec` |
+| Документ (Document) | coordinate_scheme_whitelist | `ingest_spec` |
+| Документ (Document) | completeness_formula | `enrichment_spec` |
+| Запись конвертации (ConversionRecord) | record_fields | `conversion_spec` |
+| Перевод (Translation) | caching_detail | `enrichment_spec` |
+| Утверждение (Claim) | predicate_vocabulary | `enrichment_spec` |
+| Утверждение (Claim) | temporal_reference | `enrichment_spec` |
+| Типизированная ссылка (TypedReference) | full_type_vocabulary | `enrichment_spec` |
+| Сущность мира (WorldEntity) | normalization_table | `enrichment_spec` |
+| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | `first_vocabulary_consumer_spec` |
+| Таблица авторитетности (AuthorityRuleTable) | table_content | `enrichment_spec` |
+| Граф (GraphLayer) | meta_hierarchy | `enrichment_spec` |
+| Словесная обвязка (VerbalizedGraphContext) | template | `enrichment_spec` |
+| Реестр корпуса (CorpusRegistry) | record_schema | `ingest_spec` |
+| Минимум приёмки (AdmissionMinimum) | composition | `ingest_spec` |
+| Триаж (Triage) | ruleset | `ingest_spec` |
+| Очередь исключений (ExceptionQueue) | detail | `enrichment_spec` |
+| Валидатор деливерабла (DeliverableValidator) | check_rules | `synthesis_workshop_spec` |
+
+## Реестр открытых обязательств
+
+Обязательство породы, которое сущность не закрывает. Это не поломка карты,
+а незанятая позиция: закрыть её — значит решить, чем сущность опознаётся,
+чем инвалидируется или где лежит. Решение человеческое, поэтому реестр
+считает и называет, но не блокирует.
+
+| Сущность | Порода | Незакрытое обязательство |
+|---|---|---|
+| Канал добычи (AcquisitionChannel) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Акт добычи (AcquisitionAct) | `data` | нет атрибута-идентичности (marks: identity) |
+| Подсказка добычи (AcquisitionHint) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Подсказка добычи (AcquisitionHint) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Версия содержимого (ContentVersion) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Канонический текст (CanonicalText) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Запись конвертации (ConversionRecord) | `data` | нет атрибута-идентичности (marks: identity) |
+| Фрагмент (Fragment) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Перевод (Translation) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Перевод (Translation) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Типизированная ссылка (TypedReference) | `data` | нет атрибута-идентичности (marks: identity) |
+| Типизированная ссылка (TypedReference) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Сущность мира (WorldEntity) | `data` | нет атрибута-идентичности (marks: identity) |
+| Сущность мира (WorldEntity) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Граф (GraphLayer) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Словесная обвязка (VerbalizedGraphContext) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Словесная обвязка (VerbalizedGraphContext) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Манифест деривации (DerivationManifest) | `data` | нет атрибута-идентичности (marks: identity) |
+| Манифест деривации (DerivationManifest) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Деливерабл (Deliverable) | `data` | нет атрибута-идентичности (marks: identity) |
