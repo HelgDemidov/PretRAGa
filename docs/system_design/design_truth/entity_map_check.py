@@ -143,8 +143,13 @@ def run_checks(data: dict, quick: bool) -> int:
 def hook_mode() -> int:
     """Session-hook entry: read the harness PostToolUse JSON from stdin, filter
     to files the map governs, run quick conformance + impact. Always exits 0 —
-    the session hook is advisory; the blocking exits are the local gate and CI."""
+    the session hook is advisory; the blocking exits are the local gate and CI.
+    The report is returned as hookSpecificOutput.additionalContext, which the
+    harness injects into the model context deterministically (plain stdout of a
+    successful hook is not guaranteed to reach the model)."""
+    import io
     import json
+    from contextlib import redirect_stdout
 
     try:
         payload = json.load(sys.stdin)
@@ -162,15 +167,22 @@ def hook_mode() -> int:
     )
     if not governed:
         return 0
-    print(f"[entity-map] change touches governed path: {rel}")
+    lines = [f"[entity-map] change touches governed path: {rel}"]
     try:
         data = load_map()
     except Exception as exc:
-        print(f"[entity-map] MAP UNREADABLE (fix before relying on any check): {exc}")
-        return 0
-    run_checks(data, quick=True)
-    for line in impact(data, [rel]):
-        print(f"[entity-map] {line}")
+        lines.append(f"[entity-map] MAP UNREADABLE (fix before relying on any check): {exc}")
+        data = None
+    if data is not None:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            run_checks(data, quick=True)
+        lines.extend(buf.getvalue().strip().splitlines())
+        lines.extend(f"[entity-map] {line}" for line in impact(data, [rel]))
+    print(json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}},
+        ensure_ascii=False,
+    ))
     return 0
 
 
