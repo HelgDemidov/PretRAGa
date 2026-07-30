@@ -28,9 +28,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import yaml
-
 import entity_map_build
+import yaml
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[2]
@@ -163,17 +162,15 @@ def hook_mode() -> int:
 
     try:
         payload = json.load(sys.stdin)
-    except Exception:
+    except Exception:  # noqa: BLE001 — malformed hook input must never crash the hook
         return 0
     file_path = str((payload.get("tool_input") or {}).get("file_path") or "")
     root = str(ROOT)
     if not file_path.startswith(root + "/"):
         return 0
     rel = file_path[len(root) + 1 :]
-    governed = (
-        rel.startswith("src/")
-        or rel.startswith("docs/system_design/")
-        or rel.endswith((".yaml", ".yml", ".json"))
+    governed = rel.startswith(("src/", "docs/system_design/")) or rel.endswith(
+        (".yaml", ".yml", ".json")
     )
     if not governed:
         return 0
@@ -181,7 +178,7 @@ def hook_mode() -> int:
     failed = False
     try:
         data = load_map()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — a broken map must be reported, not crash the hook
         lines.append(f"[entity-map] MAP UNREADABLE (fix before relying on any check): {exc}")
         data = None
         failed = True
