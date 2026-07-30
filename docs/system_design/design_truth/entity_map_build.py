@@ -106,6 +106,62 @@ def mermaid_block(data: dict) -> str:
     return "\n".join(lines)
 
 
+def group_summary_block(data: dict) -> str:
+    """One node per group; an edge A -> B labeled with the number of relations
+    crossing from entities of A to entities of B. Deterministic order (relation
+    order) — the freshness check compares generated views byte-for-byte."""
+    group_of = {e["id"]: e["group"] for e in data["entities"]}
+    counts: dict[tuple[str, str], int] = {}
+    for r in data["relations"]:
+        ga, gb = group_of[r["from"]], group_of[r["to"]]
+        if ga != gb:
+            counts[(ga, gb)] = counts.get((ga, gb), 0) + 1
+    lines = ["```mermaid", "flowchart LR"]
+    for gid, title in data["groups"].items():
+        lines.append(f'    {gid}["{title}"]')
+    for (ga, gb), n in counts.items():
+        lines.append(f'    {ga} -- "{n}" --> {gb}')
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def group_projection_block(data: dict, gid: str) -> str:
+    """Projection of one group: its entities inside a subgraph, every incident
+    relation, cross-group neighbours as stadium-shaped external nodes."""
+    group_of = {e["id"]: e["group"] for e in data["entities"]}
+    ru = {e["id"]: e["ru"] for e in data["entities"]}
+    members = [e for e in data["entities"] if e["group"] == gid]
+    member_ids = {e["id"] for e in members}
+    edges = [r for r in data["relations"] if gid in (group_of[r["from"]], group_of[r["to"]])]
+    externals: list[str] = []
+    for r in edges:
+        for end in (r["from"], r["to"]):
+            if end not in member_ids and end not in externals:
+                externals.append(end)
+    lines = ["```mermaid", "flowchart LR", f'    subgraph {gid}["{data["groups"][gid]}"]']
+    for e in members:
+        lines.append(f'        {e["id"]}["{e["ru"]}"]')
+    lines.append("    end")
+    for x in externals:
+        lines.append(f'    {x}(["{ru[x]}"])')
+    for r in edges:
+        lines.append(f'    {r["from"]} -- "{r["type"]}" --> {r["to"]}')
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def group_projections(data: dict) -> str:
+    out: list[str] = []
+    grouped = _by_group(data)
+    for gid, title in data["groups"].items():
+        if not grouped.get(gid):
+            continue
+        out.append(f"### {title}\n")
+        out.append(group_projection_block(data, gid))
+        out.append("")
+    return "\n".join(out)
+
+
 def attribute_tables(data: dict) -> str:
     out: list[str] = []
     grouped = _by_group(data)
@@ -163,7 +219,19 @@ def render(data: dict) -> str:
             "",
             stats(data),
             "",
-            "## Граф связей",
+            "## Сводная межгрупповая схема",
+            "",
+            "Группы как узлы; метка ребра — число связей, пересекающих границу групп.",
+            "",
+            group_summary_block(data),
+            "",
+            "## Проекции по группам",
+            "",
+            "Сущности группы — в рамке; скруглённые узлы — соседи из других групп;",
+            "показаны все связи, касающиеся группы.",
+            "",
+            group_projections(data),
+            "## Полный граф связей",
             "",
             mermaid_block(data),
             "",
