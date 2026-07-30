@@ -1,0 +1,426 @@
+# Карта сущностей и атрибутов PretRAGa — ИСТОЧНИК ИСТИНЫ карты.
+# Писатель: куратор (правки только через диалог/ревью). Представления (entity_map.md)
+# генерируются скриптом entity_map_build.py и руками не правятся.
+#
+# Статусы атрибутов:
+#   fixed               — зафиксировано соглашением (см. глоссарий/видение)
+#   placeholder         — существование согласовано, состав не расписан; обязателен trigger
+#   implementation_time — роль зафиксирована, исполнитель выбирается измерением при реализации
+#   deferred            — сознательно отложено за MVP (этап 2 / пост-MVP)
+
+groups:
+  acquisition: "Добыча"
+  content: "Документ и содержимое"
+  facts_graph: "Факты и граф"
+  storage: "Реестр и хранение"
+  processes: "Процессы"
+  query_synthesis: "Запросы и синтез"
+  cross_cutting: "Сквозное"
+
+entities:
+  # --- Добыча ---
+  - id: Connector
+    ru: "Коннектор"
+    group: acquisition
+    kind: "запись расширения"
+    attributes:
+      - {name: type_name, status: fixed, note: "имя типа — идентичность"}
+      - {name: entry_version, status: fixed, note: "версия записи; бамп инвалидирует её продукцию"}
+      - {name: contract_full_view, status: fixed, note: "адаптер отдаёт полный срез; ядро не хранит состояние адаптера"}
+  - id: AcquisitionChannel
+    ru: "Канал добычи"
+    group: acquisition
+    kind: "операционная конфигурация"
+    attributes:
+      - {name: id, status: fixed, note: "маленький иммутабельный id — для провенанса"}
+      - {name: connector_type, status: fixed, note: "ссылка на запись расширения"}
+      - {name: config, status: fixed, note: "нормализуема — для дедупликации каналов"}
+      - {name: schedule_periodicity, status: fixed, note: "заявленная периодичность опроса"}
+      - {name: declared_coverage, status: placeholder, trigger: "спецификация добычи", note: "юрисдикции/тематики/типы — состав не расписан"}
+      - {name: homogeneity_declarations, status: placeholder, trigger: "спецификация добычи", note: "по каким атрибутам канал гомогенен"}
+      - {name: gate0_rules, status: placeholder, trigger: "спецификация добычи", note: "детерминированная гигиена входа"}
+      - {name: lifecycle_states, status: placeholder, trigger: "спецификация добычи", note: "retire-not-delete зафиксирован; полный список состояний — нет"}
+      - {name: fetch_state, status: fixed, note: "курсоры/ошибки/карантин — отдельный машинный артефакт"}
+  - id: AcquisitionAct
+    ru: "Акт добычи"
+    group: acquisition
+    kind: "машинный журнал"
+    attributes:
+      - {name: channel_ref, status: fixed}
+      - {name: occurred_at, status: fixed}
+      - {name: record_fields, status: placeholder, trigger: "спецификация добычи", note: "полный состав записи журнала"}
+  - id: RawPayload
+    ru: "Сырой payload"
+    group: acquisition
+    kind: "неизменяемое значение"
+    attributes:
+      - {name: content_hash, status: fixed, note: "контент-адресация"}
+      - {name: file_store, status: fixed, note: "контент-адресованные файлы, вне БД — веб гниёт"}
+      - {name: retained_for_rejected, status: fixed, note: "хранится и для отвергнутых"}
+      - {name: retention_policy, status: deferred, note: "ручка очистки по сроку — пост-MVP"}
+  - id: AcquisitionHint
+    ru: "Подсказка добычи"
+    group: acquisition
+    kind: "производное"
+    attributes:
+      - {name: source, status: fixed, note: "висячие типизированные ссылки: цитируется, но в корпусе нет"}
+
+  # --- Документ и содержимое ---
+  - id: Document
+    ru: "Документ"
+    group: content
+    kind: "сущность (уровень работы)"
+    attributes:
+      - {name: uuid, status: fixed, note: "чеканный, класса UUIDv7, на стадии кандидата"}
+      - {name: origin_coordinates, status: fixed, note: "пары схема+значение (ELI/CELEX/реестр/URL)"}
+      - {name: coordinate_scheme_whitelist, status: placeholder, trigger: "спецификация ингеста", note: "какие схемы дают авто-склейку; URL — никогда"}
+      - {name: lifecycle, status: fixed, note: "кандидат → активен → выведен; закрытое множество"}
+      - {name: classification_attributes, status: fixed, note: "издатель, тип, юрисдикция, уровень, обязательность, язык, тематики — машинные, словарные"}
+      - {name: authority_class, status: fixed, note: "вычисляется таблицей правил, не хранится"}
+      - {name: completeness_score, status: fixed, note: "машинный счётчик полноты метаданных"}
+      - {name: completeness_formula, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: channel_ref, status: fixed}
+      - {name: act_ref, status: fixed}
+  - id: ContentVersion
+    ru: "Версия содержимого"
+    group: content
+    kind: "неизменяемое значение"
+    attributes:
+      - {name: key, status: fixed, note: "двухосный ключ (язык, редакция)"}
+      - {name: payload_ref, status: fixed}
+  - id: CanonicalText
+    ru: "Канонический текст"
+    group: content
+    kind: "неизменяемое значение"
+    attributes:
+      - {name: content_hash, status: fixed}
+      - {name: format, status: fixed, note: "Markdown — единственный носитель; острова: таблицы, mermaid (проверка рендером)"}
+  - id: ConversionRecord
+    ru: "Запись конвертации"
+    group: content
+    kind: "машинный журнал"
+    attributes:
+      - {name: converter_entry_version, status: fixed, note: "второе звено провенанса"}
+      - {name: record_fields, status: placeholder, trigger: "спецификация конвертации"}
+  - id: ProvenanceAnchor
+    ru: "Якорь провенанса"
+    group: content
+    kind: "неизменяемое значение"
+    attributes:
+      - {name: triple, status: fixed, note: "(версия содержимого, хэш канонического текста, символьный интервал)"}
+      - {name: original_only, status: fixed, note: "якоря только в оригинале, не в переводах"}
+  - id: Fragment
+    ru: "Фрагмент"
+    group: content
+    kind: "производное"
+    attributes:
+      - {name: span, status: fixed}
+      - {name: chunker_version, status: fixed, note: "пересоздаваем; долгоживущие ссылки на фрагменты запрещены"}
+  - id: Translation
+    ru: "Перевод"
+    group: content
+    kind: "производное"
+    attributes:
+      - {name: lens_only, status: fixed, note: "линза для чтения/эмбеддинга; не носитель якорей"}
+      - {name: caching_detail, status: placeholder, trigger: "спецификация обогащения"}
+
+  # --- Факты и граф ---
+  - id: Claim
+    ru: "Утверждение"
+    group: facts_graph
+    kind: "значение"
+    attributes:
+      - {name: identity, status: fixed, note: "производна от (якорь, нормализованное содержание)"}
+      - {name: anchor_required, status: fixed, note: "валидация на входе; без якоря непредставимо"}
+      - {name: spo_structure, status: fixed, note: "опциональная тройка субъект-предикат-объект — ребро графа"}
+      - {name: predicate_vocabulary, status: placeholder, trigger: "спецификация обогащения", note: "малый словарь предикатов"}
+      - {name: temporal_reference, status: placeholder, trigger: "спецификация обогащения", note: "о каком времени говорит утверждение"}
+      - {name: provenance_label, status: fixed, note: "deterministic / inferred / human-curated"}
+      - {name: extractor_version, status: fixed}
+      - {name: semantics, status: fixed, note: "позиция документа, не истина о мире"}
+  - id: TypedReference
+    ru: "Типизированная ссылка"
+    group: facts_graph
+    kind: "значение"
+    attributes:
+      - {name: base_types, status: fixed, note: "cites/amends/implements/supersedes — база ELI"}
+      - {name: full_type_vocabulary, status: placeholder, trigger: "спецификация обогащения"}
+      - {name: source, status: fixed, note: "payload коннектора | идентификатор в тексте (с якорем)"}
+  - id: WorldEntity
+    ru: "Сущность мира"
+    group: facts_graph
+    kind: "сущность"
+    attributes:
+      - {name: normalization_table, status: placeholder, trigger: "спецификация обогащения", note: "открытый пункт: разрешение сущностей"}
+  - id: ControlledVocabulary
+    ru: "Контролируемый словарь"
+    group: facts_graph
+    kind: "мета-уровень (человек)"
+    attributes:
+      - {name: mechanism, status: fixed, note: "внешний словарь, CI-валидация, код не ветвится"}
+      - {name: vocabulary_contents, status: placeholder, trigger: "первая спецификация, использующая словарь", note: "составы: издатели, типы, юрисдикции, уровни, обязательность, тематики, предикаты, типы ссылок, типы узлов"}
+  - id: AuthorityRuleTable
+    ru: "Таблица авторитетности"
+    group: facts_graph
+    kind: "мета-уровень (человек)"
+    attributes:
+      - {name: mechanism, status: fixed, note: "(издатель, тип, обязательность, уровень) → класс"}
+      - {name: table_content, status: placeholder, trigger: "спецификация обогащения"}
+  - id: GraphLayer
+    ru: "Граф"
+    group: facts_graph
+    kind: "производное"
+    attributes:
+      - {name: node_types, status: fixed, note: "работы, сущности мира, темы"}
+      - {name: projections, status: fixed, note: "мультиструктурность — проекции по типам рёбер"}
+      - {name: communities, status: fixed, note: "кластеризация Leiden-класса на проекциях; метка inferred; навигация, не факты"}
+      - {name: meta_hierarchy, status: placeholder, trigger: "спецификация обогащения", note: "словарь типов узлов + предикатов + посев нормализации"}
+      - {name: community_summaries, status: deferred, note: "сводки сообществ — этап 2"}
+  - id: VerbalizedGraphContext
+    ru: "Словесная обвязка"
+    group: facts_graph
+    kind: "производное"
+    attributes:
+      - {name: mechanism, status: fixed, note: "граф входит в вектора через текст; вход эмбеддера ≠ заякоренный текст"}
+      - {name: template, status: placeholder, trigger: "спецификация обогащения"}
+
+  # --- Реестр и хранение ---
+  - id: CorpusRegistry
+    ru: "Реестр корпуса"
+    group: storage
+    kind: "хранилище (git)"
+    attributes:
+      - {name: record_machine, status: fixed, note: "машинная запись; человек не правит"}
+      - {name: overrides_human, status: fixed, note: "разреженные поправки — единственная ручная поверхность; бьют машинное"}
+      - {name: record_schema, status: placeholder, trigger: "спецификация ингеста"}
+      - {name: storage_boundary, status: fixed, note: "членство и жизненный цикл → git; ход обработки → машинное хранилище"}
+  - id: MachineStore
+    ru: "Машинное хранилище"
+    group: storage
+    kind: "хранилище (роль)"
+    attributes:
+      - {name: role, status: fixed, note: "встраиваемое, бессерверное, табличное"}
+      - {name: engine, status: implementation_time, note: "выбор измерением; наследник старого проекта — кандидат, не победитель"}
+  - id: VectorIndex
+    ru: "Векторный индекс"
+    group: storage
+    kind: "производное"
+    attributes:
+      - {name: embedding_model, status: implementation_time, note: "роль: одна мультиязычная облачная модель на весь корпус"}
+      - {name: precision_dims, status: implementation_time, note: "точность/размерность — по бюджету памяти, измерением"}
+  - id: LexicalIndex
+    ru: "Лексический индекс"
+    group: storage
+    kind: "производное"
+    attributes:
+      - {name: role, status: fixed, note: "локальный, BM25-класса — точность по идентификаторам и числам"}
+      - {name: engine, status: implementation_time}
+  - id: DerivationManifest
+    ru: "Манифест деривации"
+    group: storage
+    kind: "значение"
+    attributes:
+      - {name: registry_commit, status: fixed}
+      - {name: derivation_versions, status: fixed, note: "версии экстракторов/модели эмбеддинга/параметров входа"}
+  - id: Corpus
+    ru: "Корпус"
+    group: storage
+    kind: "предикат"
+    attributes:
+      - {name: definition, status: fixed, note: "все активные документы реестра; без id и конфигурации"}
+  - id: Workspace
+    ru: "Рабочее пространство"
+    group: storage
+    kind: "хранилище"
+    attributes:
+      - {name: separate_git, status: fixed, note: "свой git; всегда отдельно от репозитория кода"}
+
+  # --- Процессы ---
+  - id: AdmissionMinimum
+    ru: "Минимум приёмки"
+    group: processes
+    kind: "политика"
+    attributes:
+      - {name: mechanism, status: fixed, note: "одна функция: загрузчик падает, валидатор собирает; версионируема"}
+      - {name: composition, status: placeholder, trigger: "не позже проектирования ингеста", note: "главный открытый пункт"}
+  - id: Triage
+    ru: "Триаж"
+    group: processes
+    kind: "процесс"
+    attributes:
+      - {name: full_evidence, status: fixed, note: "после скачивания и конвертации"}
+      - {name: verdict_with_reason, status: fixed, note: "вердикт останавливает продвижение; удаления не существует"}
+      - {name: rules_then_llm, status: fixed, note: "сначала правила, дешёвая модель где правил мало"}
+      - {name: ruleset, status: placeholder, trigger: "спецификация ингеста"}
+  - id: Deduplication
+    ru: "Дедупликация"
+    group: processes
+    kind: "процесс"
+    attributes:
+      - {name: point1_deterministic, status: fixed, note: "на входе, автоматически: хэш payload + белый список схем"}
+      - {name: point2_fuzzy, status: fixed, note: "после приёмки, только предложения: близость векторов + названия"}
+      - {name: asymmetry, status: fixed, note: "ложная склейка хуже пропущенной"}
+  - id: MergeOperation
+    ru: "Склейка"
+    group: processes
+    kind: "процесс"
+    attributes:
+      - {name: alias, status: fixed, note: "id дубля — вечный алиас; не удаляется, не переиспользуется"}
+      - {name: version_takeover, status: fixed, note: "выживший забирает линейки версий"}
+  - id: Enrichment
+    ru: "Обогащение"
+    group: processes
+    kind: "процесс"
+    attributes:
+      - {name: reconciliation_style, status: fixed}
+      - {name: two_level_incrementality, status: fixed, note: "пере-деривация — версия; дорогой перерасчёт — фрагмент"}
+      - {name: language_routing, status: fixed, note: "экстрактор — запись расширения с ключом по языку; региональная модель — кандидат для черногорского"}
+  - id: ExceptionQueue
+    ru: "Очередь исключений"
+    group: processes
+    kind: "процесс"
+    attributes:
+      - {name: concept, status: fixed, note: "неуверенные извлечения и неоднозначные склейки — человеку"}
+      - {name: detail, status: placeholder, trigger: "спецификация обогащения"}
+  - id: Reconciliation
+    ru: "Реконсиляция"
+    group: processes
+    kind: "дисциплина"
+    attributes:
+      - {name: level_triggered, status: fixed, note: "работа от состояния мира; повторный прогон — пустая операция; чинит историю"}
+      - {name: item_isolation_breaker, status: fixed, note: "отказ элемента не роняет батч; порог аварийности прерывает прогон"}
+      - {name: checkpoints_idempotent, status: fixed}
+
+  # --- Запросы и синтез ---
+  - id: QueryLayer
+    ru: "Слой запросов"
+    group: query_synthesis
+    kind: "процесс (ничего не хранит)"
+    attributes:
+      - {name: pipeline, status: fixed, note: "плотный+лексический → слияние → посев → PPR → выдача с якорями | отказ"}
+      - {name: fusion_method, status: implementation_time, note: "роль — слияние класса RRF"}
+      - {name: refusal_contract, status: fixed, note: "обязан отказаться, а не догадаться"}
+      - {name: freshness_check, status: fixed, note: "по манифестам деривации; отставание объявляется явно"}
+      - {name: reranker, status: deferred, note: "ступень здесь; триггер — измерение качества поиска; только API"}
+  - id: TrendQuery
+    ru: "Запрос тренда"
+    group: query_synthesis
+    kind: "процесс"
+    attributes:
+      - {name: counting, status: fixed, note: "счёт по слою утверждений; считаются работы, не языковые копии"}
+      - {name: semantics, status: fixed, note: "представленность в корпусе, не независимая корроборация"}
+      - {name: citation_collapse, status: deferred, note: "свёртка цитирований — этап 2"}
+  - id: Deliverable
+    ru: "Деливерабл"
+    group: query_synthesis
+    kind: "сущность"
+    attributes:
+      - {name: markdown_git, status: fixed, note: "Markdown в git рабочего пространства"}
+      - {name: stamp, status: fixed, note: "манифест деривации"}
+      - {name: parameter_matrix, status: fixed, note: "семейства вариантов над явной матрицей параметров"}
+  - id: DeliverableValidator
+    ru: "Валидатор деливерабла"
+    group: query_synthesis
+    kind: "процесс"
+    attributes:
+      - {name: mechanism, status: fixed, note: "каждое утверждение → разрешимая ссылка на якорь; иначе пометка «суждение автора» или удаление"}
+      - {name: check_rules, status: placeholder, trigger: "спецификация мастерской синтеза"}
+
+  # --- Сквозное ---
+  - id: NetworkClient
+    ru: "Сетевой клиент"
+    group: cross_cutting
+    kind: "сквозной модуль"
+    attributes:
+      - {name: single, status: fixed, note: "все исходящие вызовы — модели И скачивание"}
+      - {name: armour, status: fixed, note: "повторы+разброс, ошибка-в-успехе, fail-fast, вежливость, бюджетные предохранители"}
+  - id: WriterLock
+    ru: "Замок писателя"
+    group: cross_cutting
+    kind: "сквозной механизм"
+    attributes:
+      - {name: single_lock, status: fixed, note: "один замок на все пишущие команды пространства"}
+      - {name: lockfree_reads, status: fixed, note: "чтение по снимку, без замка"}
+
+relations:
+  # Добыча
+  - {from: AcquisitionChannel, to: Connector, type: "экземпляр типа"}
+  - {from: AcquisitionChannel, to: AcquisitionAct, type: "порождает"}
+  - {from: AcquisitionAct, to: RawPayload, type: "приносит"}
+  - {from: AcquisitionAct, to: Document, type: "вводит кандидата"}
+  - {from: AcquisitionAct, to: NetworkClient, type: "скачивает через"}
+  - {from: AcquisitionHint, to: AcquisitionChannel, type: "питает пере-наполнение"}
+  # Документ и содержимое
+  - {from: Document, to: ContentVersion, type: "имеет версии"}
+  - {from: ContentVersion, to: RawPayload, type: "payload"}
+  - {from: ContentVersion, to: CanonicalText, type: "канонизируется в"}
+  - {from: CanonicalText, to: ConversionRecord, type: "произведён по"}
+  - {from: ConversionRecord, to: RawPayload, type: "из сырья"}
+  - {from: CanonicalText, to: Fragment, type: "нарезается на"}
+  - {from: CanonicalText, to: ProvenanceAnchor, type: "адресуется"}
+  - {from: Fragment, to: ProvenanceAnchor, type: "несёт интервал"}
+  - {from: Translation, to: ContentVersion, type: "линза над"}
+  - {from: Document, to: CorpusRegistry, type: "записан в"}
+  - {from: Document, to: ControlledVocabulary, type: "классифицируется по"}
+  - {from: AuthorityRuleTable, to: Document, type: "вычисляет класс"}
+  # Факты и граф
+  - {from: Claim, to: ProvenanceAnchor, type: "заякорено"}
+  - {from: Claim, to: WorldEntity, type: "упоминает"}
+  - {from: Claim, to: ControlledVocabulary, type: "темы и предикаты из"}
+  - {from: TypedReference, to: Document, type: "связывает документы"}
+  - {from: TypedReference, to: ProvenanceAnchor, type: "якорь текстовой находки"}
+  - {from: TypedReference, to: ControlledVocabulary, type: "типы из"}
+  - {from: TypedReference, to: AcquisitionHint, type: "висячая порождает"}
+  - {from: GraphLayer, to: Claim, type: "рёбра из"}
+  - {from: GraphLayer, to: TypedReference, type: "рёбра из"}
+  - {from: GraphLayer, to: WorldEntity, type: "узлы"}
+  - {from: GraphLayer, to: Document, type: "узлы-работы"}
+  - {from: GraphLayer, to: ControlledVocabulary, type: "мета-словари"}
+  - {from: VerbalizedGraphContext, to: GraphLayer, type: "черпает из"}
+  - {from: VerbalizedGraphContext, to: VectorIndex, type: "вход эмбеддинга"}
+  # Реестр и хранение
+  - {from: Corpus, to: CorpusRegistry, type: "предикат над"}
+  - {from: CorpusRegistry, to: Workspace, type: "живёт в"}
+  - {from: RawPayload, to: Workspace, type: "живёт в"}
+  - {from: MachineStore, to: Workspace, type: "живёт в"}
+  - {from: AcquisitionAct, to: MachineStore, type: "хранится в"}
+  - {from: ConversionRecord, to: MachineStore, type: "хранится в"}
+  - {from: Claim, to: MachineStore, type: "хранится в"}
+  - {from: VectorIndex, to: Fragment, type: "индексирует"}
+  - {from: LexicalIndex, to: CanonicalText, type: "индексирует"}
+  - {from: VectorIndex, to: DerivationManifest, type: "несёт"}
+  - {from: LexicalIndex, to: DerivationManifest, type: "несёт"}
+  - {from: GraphLayer, to: DerivationManifest, type: "несёт"}
+  - {from: DerivationManifest, to: CorpusRegistry, type: "коммит реестра"}
+  # Процессы
+  - {from: AdmissionMinimum, to: Document, type: "ворота приёмки"}
+  - {from: Triage, to: Document, type: "выносит вердикт"}
+  - {from: Triage, to: ExceptionQueue, type: "направляет"}
+  - {from: Deduplication, to: MergeOperation, type: "предлагает"}
+  - {from: MergeOperation, to: Document, type: "объединяет"}
+  - {from: Enrichment, to: Claim, type: "извлекает"}
+  - {from: Enrichment, to: TypedReference, type: "извлекает"}
+  - {from: Enrichment, to: Translation, type: "производит"}
+  - {from: Enrichment, to: VerbalizedGraphContext, type: "генерирует"}
+  - {from: Enrichment, to: VectorIndex, type: "строит"}
+  - {from: Enrichment, to: LexicalIndex, type: "строит"}
+  - {from: Enrichment, to: GraphLayer, type: "строит"}
+  - {from: Enrichment, to: ExceptionQueue, type: "направляет"}
+  - {from: Enrichment, to: NetworkClient, type: "вызывает"}
+  - {from: Reconciliation, to: Triage, type: "пере-триаж"}
+  - {from: Reconciliation, to: Deduplication, type: "пере-предлагает"}
+  - {from: Reconciliation, to: Enrichment, type: "правит"}
+  # Запросы и синтез
+  - {from: QueryLayer, to: VectorIndex, type: "читает"}
+  - {from: QueryLayer, to: LexicalIndex, type: "читает"}
+  - {from: QueryLayer, to: GraphLayer, type: "расширяет по (PPR)"}
+  - {from: QueryLayer, to: CorpusRegistry, type: "сверяет свежесть"}
+  - {from: QueryLayer, to: ProvenanceAnchor, type: "выдаёт"}
+  - {from: QueryLayer, to: NetworkClient, type: "эмбеддинг вопроса"}
+  - {from: TrendQuery, to: Claim, type: "считает"}
+  - {from: Deliverable, to: DerivationManifest, type: "штампуется"}
+  - {from: Deliverable, to: Workspace, type: "живёт в"}
+  - {from: DeliverableValidator, to: Deliverable, type: "проверяет"}
+  - {from: DeliverableValidator, to: ProvenanceAnchor, type: "разрешает"}
+  # Сквозное
+  - {from: WriterLock, to: Workspace, type: "охраняет"}

@@ -2,8 +2,13 @@
 .env
 
 # Internal working docs and process notes — not for public distribution.
+# Exception: docs/system_design/ is the architectural truth (entity map, glossary,
+# vision) — it MUST be versioned so its history and CI checks exist. Contents are
+# excluded first, then the truth subtree is re-included (a directory cannot be
+# re-included if the directory itself is excluded).
 /CLAUDE.md
-/docs/
+/docs/*
+!/docs/system_design/
 /.claude/
 /.serena/
 
