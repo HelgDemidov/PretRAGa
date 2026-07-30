@@ -1,0 +1,42 @@
+[project]
+name = "pretraga"
+version = "0.1.0"
+description = "Document acquisition, conversion, and retrieval-augmented generation pipeline"
+requires-python = ">=3.12"
+dependencies = [
+    "pdfplumber==0.11.10",   # PDF -> Markdown
+    "trafilatura==2.1.0",    # HTML -> Markdown (main-content extraction)
+    "mammoth==1.12.0",       # DOCX -> HTML, with a custom image handler
+    "markdownify==1.2.3",    # HTML -> Markdown (subclassed for the DOCX path)
+    "lxml==6.1.1",           # promote ELI markup to real <hN> before trafilatura
+    "openpyxl==3.1.5",       # XLSX -> Markdown, plus embedded-chart parts
+    "duckdb==1.5.5",         # bronze layer for raw registry-connector payloads
+    "mermaidx==0.9.3",       # render-validate mermaid output with real mermaid.js
+    "pydantic==2.13.4",      # curated-record schema
+    "PyYAML==6.0.3",         # read/write records and controlled vocabularies
+    "networkx==3.6.1",       # heterogeneous knowledge graph
+    "tokenizers==0.23.1",    # bge-m3 tokenizer for canonical chunking
+    "numpy==2.5.1",          # vector operations
+    "onnxruntime==1.27.0",   # bge-m3 int8 ONNX inference, CPU
+]
+
+[dependency-groups]
+dev = [
+    "mypy==2.3.0",
+    "ruff==0.15.22",
+    "pip-audit==2.10.1",              # CVE audit of dependencies
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "types-PyYAML==6.0.12.20260518",
+    "types-openpyxl==3.1.5.20260518",
+    "reportlab==5.0.0",                # synthetic PDF fixtures for converter tests
+    "types-reportlab==4.5.1.20260712",
+    "hypothesis==6.160.0",             # property-based testing
+    "erdantic==1.2.1",                 # ER diagrams generated directly from pydantic/dataclass models
+    "import-linter==2.13",             # enforce import-boundary contracts between layers
+    "grimp==3.15",                     # import graph backing import-linter
+    "pydeps==3.0.6",                   # visual import graph; needs the system `graphviz` package (`dot`) installed separately
+]
+
+[tool.uv]
+package = false

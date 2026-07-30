@@ -1,0 +1,17 @@
+# Local environment — not portable, mirrors .gitignore.
+.venv/
+
+# Generated lockfile: mostly hashes/URLs, never worth reading in full.
+# Use `uv tree` / `uv pip list` or read pyproject.toml for dependency questions instead.
+uv.lock
+
+# Tool and test caches (mirrors .gitignore; may not exist yet).
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# Serena's own generated index/cache — not its tracked project.yml or memories/.
+.serena/cache/

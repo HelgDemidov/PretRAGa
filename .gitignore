@@ -1,0 +1,17 @@
+# Secrets — never tracked. The template is .env.example, which carries placeholders only.
+.env
+
+# Internal working docs and process notes — not for public distribution.
+/CLAUDE.md
+/docs/
+
+# Local environment, not portable — recreate, do not copy.
+.venv/
+
+# Tool and test caches.
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
