@@ -1,12 +1,19 @@
-"""Validate entity_map.yaml as a graph and generate entity_map.md.
+"""Validate entity_map.yaml as a graph and generate BOTH derived views:
+entity_map.md (graph + attribute tables + placeholder registry) and
+entity_glossary.md (prose glossary: hand-written conventions preamble +
+per-entity definitions from the map).
 
-Source of truth: entity_map.yaml (curated). This script is the only writer of
-entity_map.md — never edit the generated file by hand.
+Source of truth: entity_map.yaml — the ONLY entry channel for entity/term
+changes, including definitions. glossary_preamble.md holds cross-cutting
+conventions prose (a disjoint domain: no entity entries live there).
+This script is the only writer of both generated views — never edit them
+by hand; entity_map_check.py detects stale or hand-edited views.
 
 Checks: duplicate ids, dangling relation endpoints, isolated entities,
-placeholders without a decision trigger, unknown groups/statuses.
+placeholders without a decision trigger, unknown groups/statuses,
+entities without a definition.
 
-Run: .venv/bin/python docs/system_design/entity_map_build.py
+Run: .venv/bin/python docs/system_design/design_truth/entity_map_build.py
 """
 from __future__ import annotations
 
@@ -18,7 +25,9 @@ import yaml
 
 HERE = Path(__file__).parent
 SOURCE = HERE / "entity_map.yaml"
-TARGET = HERE / "entity_map.md"
+PREAMBLE = HERE / "glossary_preamble.md"
+MAP_VIEW = HERE / "entity_map.md"
+GLOSSARY_VIEW = HERE / "entity_glossary.md"
 
 STATUSES = {
     "fixed": "✅ зафиксировано",
@@ -43,6 +52,11 @@ def validate(data: dict) -> list[str]:
     for e in entities:
         if e.get("group") not in groups:
             errors.append(f"unknown group {e.get('group')!r} on entity {e['id']}")
+        if not str(e.get("definition", "")).strip():
+            errors.append(
+                f"entity {e['id']} has no definition — an entity that cannot be "
+                "defined in prose is not ready to enter the truth"
+            )
         for a in e.get("attributes", []):
             if a.get("status") not in STATUSES:
                 errors.append(f"unknown status {a.get('status')!r} on {e['id']}.{a.get('name')}")
@@ -65,13 +79,18 @@ def validate(data: dict) -> list[str]:
     return errors
 
 
+def _by_group(data: dict) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for e in data["entities"]:
+        grouped.setdefault(e["group"], []).append(e)
+    return grouped
+
+
 def mermaid_block(data: dict) -> str:
     lines = ["```mermaid", "flowchart LR"]
-    by_group: dict[str, list[dict]] = {}
-    for e in data["entities"]:
-        by_group.setdefault(e["group"], []).append(e)
+    grouped = _by_group(data)
     for gid, title in data["groups"].items():
-        members = by_group.get(gid, [])
+        members = grouped.get(gid, [])
         if not members:
             continue
         lines.append(f'    subgraph {gid}["{title}"]')
@@ -86,11 +105,9 @@ def mermaid_block(data: dict) -> str:
 
 def attribute_tables(data: dict) -> str:
     out: list[str] = []
-    by_group: dict[str, list[dict]] = {}
-    for e in data["entities"]:
-        by_group.setdefault(e["group"], []).append(e)
+    grouped = _by_group(data)
     for gid, title in data["groups"].items():
-        members = by_group.get(gid, [])
+        members = grouped.get(gid, [])
         if not members:
             continue
         out.append(f"### {title}\n")
@@ -162,6 +179,32 @@ def render(data: dict) -> str:
     )
 
 
+def render_glossary(data: dict) -> str:
+    parts = [
+        "# Сквозной словарь сущностей PretRAGa",
+        "",
+        "СГЕНЕРИРОВАНО из `entity_map.yaml` скриптом `entity_map_build.py` — руками",
+        "не править. Единственный канал изменения сущностей, терминов и определений —",
+        "`entity_map.yaml`; сквозные конвенции — `glossary_preamble.md`. Писатель",
+        "этого файла — генератор; ручная правка ловится проверкой свежести.",
+        "",
+        PREAMBLE.read_text(encoding="utf-8").strip(),
+        "",
+        "---",
+    ]
+    grouped = _by_group(data)
+    for gid, title in data["groups"].items():
+        members = grouped.get(gid, [])
+        if not members:
+            continue
+        parts.append(f"\n## {title}")
+        for e in members:
+            parts.append(f"\n### {e['ru']} ({e['id']})")
+            parts.append(str(e["definition"]).strip())
+    parts.append("")
+    return "\n".join(parts)
+
+
 def main() -> int:
     data = yaml.safe_load(SOURCE.read_text(encoding="utf-8"))
     errors = validate(data)
@@ -170,9 +213,11 @@ def main() -> int:
         for err in errors:
             print(f"  - {err}")
         return 1
-    TARGET.write_text(render(data), encoding="utf-8")
+    MAP_VIEW.write_text(render(data), encoding="utf-8")
+    GLOSSARY_VIEW.write_text(render_glossary(data), encoding="utf-8")
     print(f"OK: {stats(data)}")
-    print(f"written: {TARGET}")
+    print(f"written: {MAP_VIEW}")
+    print(f"written: {GLOSSARY_VIEW}")
     return 0
 
 

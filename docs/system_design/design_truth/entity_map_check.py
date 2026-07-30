@@ -4,9 +4,12 @@ the map — divergence is resolved by a human decision (fix code, or edit the ma
 as an explicit design decision).
 
 Check classes (grow as the codebase appears):
-  1. map integrity        — delegated to entity_map_build.validate
-  2. glossary <-> map     — entity code-names in entity_glossary.md headings
-                            must match map entity ids, both directions
+  1. map integrity        — delegated to entity_map_build.validate (includes
+                            definitions-required: the map is the ONLY entry
+                            channel for entities, terms and their definitions)
+  2. generated views      — entity_map.md and entity_glossary.md must equal a
+                            fresh render of the map: catches both a forgotten
+                            regeneration and a hand edit of a generated file
   3. code anchors         — every `implements` prefix must resolve on disk;
                             entities without anchors are counted as pending
                             (informational until src/ exists)
@@ -22,7 +25,6 @@ Run: .venv/bin/python docs/system_design/entity_map/entity_map_check.py
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -33,11 +35,7 @@ import entity_map_build
 HERE = Path(__file__).parent
 ROOT = HERE.parents[2]
 SRC_ROOT = ROOT / "src"
-GLOSSARY = HERE / "entity_glossary.md"
 MAP_FILE = HERE / "entity_map.yaml"
-
-# glossary entries carry their code name in the heading: "### Документ (Document)"
-_GLOSSARY_ID_RE = re.compile(r"^###\s+.+\((?P<code>[A-Z][A-Za-z]+)\)\s*$", re.MULTILINE)
 
 
 def load_map() -> dict:
@@ -48,14 +46,22 @@ def check_map_integrity(data: dict) -> list[str]:
     return [f"map: {e}" for e in entity_map_build.validate(data)]
 
 
-def check_glossary(data: dict) -> list[str]:
+def check_generated_views(data: dict) -> list[str]:
+    """Both generated views must equal a fresh render of the map — anything
+    else means a forgotten regeneration or a hand edit of a generated file."""
     errors: list[str] = []
-    glossary_ids = set(_GLOSSARY_ID_RE.findall(GLOSSARY.read_text(encoding="utf-8")))
-    map_ids = {e["id"] for e in data["entities"]}
-    for missing in sorted(map_ids - glossary_ids):
-        errors.append(f"glossary: map entity {missing} has no glossary entry")
-    for stray in sorted(glossary_ids - map_ids):
-        errors.append(f"glossary: entry ({stray}) does not match any map entity id")
+    expected = {
+        entity_map_build.MAP_VIEW: entity_map_build.render(data),
+        entity_map_build.GLOSSARY_VIEW: entity_map_build.render_glossary(data),
+    }
+    for path, content in expected.items():
+        if not path.exists():
+            errors.append(f"views: {path.name} is missing — run entity_map_build.py")
+        elif path.read_text(encoding="utf-8") != content:
+            errors.append(
+                f"views: {path.name} is stale or hand-edited — regenerate with "
+                "entity_map_build.py (generated views are never edited by hand)"
+            )
     return errors
 
 
@@ -123,7 +129,7 @@ def impact(data: dict, changed: list[str]) -> list[str]:
 def run_checks(data: dict, quick: bool) -> int:
     errors: list[str] = []
     errors += check_map_integrity(data)
-    errors += check_glossary(data)
+    errors += check_generated_views(data)
     anchor_errors, info = check_anchors(data)
     errors += anchor_errors
     errors += check_orphans(data)
