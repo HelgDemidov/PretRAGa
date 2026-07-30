@@ -66,7 +66,7 @@ def validate(data: dict) -> list[str]:
             if a.get("status") == "placeholder" and not a.get("trigger"):
                 errors.append(f"placeholder without trigger: {e['id']}.{a.get('name')}")
 
-    graph = nx.DiGraph()
+    graph: nx.DiGraph[str] = nx.DiGraph()
     graph.add_nodes_from(known)
     for r in relations:
         for endpoint in (r["from"], r["to"]):

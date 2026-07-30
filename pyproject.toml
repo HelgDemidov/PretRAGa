@@ -36,6 +36,7 @@ dev = [
     "import-linter==2.13",             # enforce import-boundary contracts between layers
     "grimp==3.15",                     # import graph backing import-linter
     "pydeps==3.0.6",                   # visual import graph; needs the system `graphviz` package (`dot`) installed separately
+    "types-networkx==3.6.1.20260728",
 ]
 
 [tool.uv]
