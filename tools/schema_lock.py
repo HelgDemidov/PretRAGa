@@ -199,11 +199,26 @@ def check(package: str = "pretraga.domain", lock_path: Path = LOCK) -> int:
     return 0
 
 
-def write(package: str, version: str, lock_path: Path) -> int:
+def write(package: str, version: str | None, lock_path: Path) -> int:
+    """Rewrite the lock. The version bump is the ONE human decision here, so
+    the machine refuses to absorb a breaking change under the stored version:
+    without a NEW --version, breaking changes do not get recorded."""
+    fresh = derive(package)
+    if lock_path.exists():
+        stored = json.loads(lock_path.read_text(encoding="utf-8"))
+        breaking, _ = classify(stored["shape"], fresh)
+        new_version = version or stored["version"]
+        if breaking and new_version == stored["version"]:
+            print(f"SCHEMA: refusing to overwrite v{stored['version']}: "
+                  f"{len(breaking)} breaking change(s) need a NEW --version — "
+                  "the bump is the human decision, the machine will not make it")
+            return 1
+    else:
+        new_version = version or "1.0.0"
     lock_path.write_text(
-        json.dumps({"version": version, "shape": derive(package)}, indent=2, sort_keys=True) + "\n",
+        json.dumps({"version": new_version, "shape": fresh}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8")
-    print(f"written: {lock_path}")
+    print(f"written: {lock_path} (v{new_version})")
     return 0
 
 
@@ -212,7 +227,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--package", default="pretraga.domain")
     ap.add_argument("--lock", type=Path, default=LOCK)
     ap.add_argument("--write", action="store_true")
-    ap.add_argument("--version", default="1.0.0")
+    ap.add_argument("--version", default=None)
     ns = ap.parse_args(argv)
     return write(ns.package, ns.version, ns.lock) if ns.write else check(ns.package, ns.lock)
 

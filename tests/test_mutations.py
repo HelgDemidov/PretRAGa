@@ -93,6 +93,9 @@ MUTATIONS = [
              '            elif a.get("default") != b.get("default") or a.get("factory") != '
              'b.get("factory"):',
              "            elif False:"),
+    Mutation("breaking write accepted without a version bump", LOCK,
+             '        if breaking and new_version == stored["version"]:',
+             "        if False:"),
     Mutation("model_config change invisible", LOCK,
              '                breaking.append(f"{name}: model_config[{k}] {oc.get(k)} -> '
              '{nc.get(k)}")',

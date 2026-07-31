@@ -124,6 +124,43 @@ def test_every_concept_is_locked() -> None:
     assert set(truth.survey().concepts) <= set(shape)
 
 
+def _run_write(ring: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "tools/schema_lock.py", "--write", *args], cwd=ring,
+        capture_output=True, text=True,
+        env={"PYTHONPATH": str(ring / "src"), "PATH": "/usr/bin:/bin"}, check=False)
+
+
+def test_a_breaking_write_without_a_new_version_is_refused(ring: Path) -> None:
+    """The version bump is the one human decision; --write must not absorb a
+    breaking change under the stored version."""
+    _edit(ring, "facts.py", "    extractor_version: int\n", "")
+    lock = ring / "docs" / "system_design" / "schema.lock.json"
+    before = lock.read_bytes()
+    done = _run_write(ring)
+    assert done.returncode == 1, done.stdout
+    assert "NEW --version" in done.stdout
+    assert lock.read_bytes() == before, "the lock must stay untouched on refusal"
+
+
+def test_a_breaking_write_with_a_new_version_succeeds(ring: Path) -> None:
+    _edit(ring, "facts.py", "    extractor_version: int\n", "")
+    done = _run_write(ring, "--version", "2.0.0")
+    assert done.returncode == 0, done.stdout
+    lock = json.loads((ring / "docs" / "system_design" / "schema.lock.json").read_text())
+    assert lock["version"] == "2.0.0"
+    assert _run(ring).returncode == 0
+
+
+def test_an_additive_write_keeps_the_stored_version(ring: Path) -> None:
+    _edit(ring, "document.py", "    lifecycle: Lifecycle",
+          "    lifecycle: Lifecycle\n    note: str | None = None")
+    done = _run_write(ring)
+    assert done.returncode == 0, done.stdout
+    lock = json.loads((ring / "docs" / "system_design" / "schema.lock.json").read_text())
+    assert lock["version"] == "1.0.0"
+
+
 def test_generic_parameters_are_recorded_in_full() -> None:
     """Measured regression this pins: naming generics by __name__ collapsed
     `tuple[OriginCoordinate, ...]` to `builtins.tuple`, so a change of the

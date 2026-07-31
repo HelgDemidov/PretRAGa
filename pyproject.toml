@@ -64,6 +64,11 @@ mypy_path = ["src", "tools"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 
+[tool.pyright]
+# Pylance/pyright resolve pretraga and the repo tools exactly the way mypy
+# (mypy_path) and pytest (pythonpath) do — three tools, one path pair.
+extraPaths = ["src", "tools"]
+
 [tool.pytest.ini_options]
 # No testpaths: discovery walks the repo, so tests added under src/ or tests/
 # are picked up without editing a hand-maintained list here.
