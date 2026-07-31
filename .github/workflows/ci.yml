@@ -1,14 +1,13 @@
-# The remote half of the gate. It runs the SAME four checks as the local gate
+# The remote half of the gate. It runs the SAME six checks as the local gate
 # command in CLAUDE.md §10, with the same marker filter — on divergence, that
 # command is reconciled against this file, not the other way round.
 #
-# One job, not four. The checks themselves take about fifteen seconds together;
-# installing 113 locked dependencies dominates everything else, so splitting
-# them would pay for that install four times over and save no wall clock. What
-# splitting is actually for — telling which check failed — is already provided
-# by per-step status, and `if: '!cancelled()'` keeps a single failure from
-# hiding the other three. Split this the day a real matrix appears (several
-# Python versions or operating systems), not before.
+# One job, not six. The checks themselves take under half a minute together;
+# installing the locked dependencies dominates everything else, so splitting
+# would pay for that install repeatedly and save no wall clock. What splitting
+# is actually for — telling which check failed — is already provided by
+# per-step status, and `if: '!cancelled()'` keeps a single failure from hiding
+# the rest. Split this the day a real matrix appears, not before.
 name: CI
 
 on:
@@ -59,6 +58,16 @@ jobs:
         if: '!cancelled()'
         run: uv run pytest -m "not heavy" --cov --cov-report=term-missing
 
-      - name: Entity map conformance
+      - name: Import contracts
         if: '!cancelled()'
-        run: uv run python docs/system_design/design_truth/entity_map_check.py
+        env:
+          PYTHONPATH: src
+        run: uv run lint-imports
+
+      - name: Domain truth
+        if: '!cancelled()'
+        run: uv run python tools/truth.py
+
+      - name: Schema lock
+        if: '!cancelled()'
+        run: uv run python tools/schema_lock.py
