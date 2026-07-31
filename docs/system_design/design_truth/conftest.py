@@ -12,6 +12,7 @@ not a remembered list of files — and fails loudly naming what moved.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -46,3 +47,16 @@ def production_untouched() -> Iterator[None]:
         "a test wrote into production truth artifacts: "
         f"changed={changed} added={added} removed={removed}"
     )
+
+
+@pytest.fixture
+def truth_copy(tmp_path: Path) -> Path:
+    """The truth directory copied at the SAME depth as production.
+
+    Depth matters: the tools derive ROOT from their own location, so a copy at
+    a different depth silently changes what those paths resolve to — the class
+    of breakage that stays quiet until something reads the wrong file."""
+    dest = tmp_path / "docs" / "system_design" / "design_truth"
+    dest.parent.mkdir(parents=True)
+    shutil.copytree(HERE, dest, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
+    return dest

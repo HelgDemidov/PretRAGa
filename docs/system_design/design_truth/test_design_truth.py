@@ -18,7 +18,6 @@ from __future__ import annotations
 import copy
 import io
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -810,14 +809,6 @@ def test_dropping_relations_never_reduces_the_registry(source_text: str, dropped
 # --------------------------------------------------------------------------
 # end to end, against a copy — the entry points default to production paths
 # --------------------------------------------------------------------------
-
-@pytest.fixture
-def truth_copy(tmp_path: Path) -> Path:
-    dest = tmp_path / "docs" / "system_design" / "design_truth"
-    dest.parent.mkdir(parents=True)
-    shutil.copytree(HERE, dest, ignore=shutil.ignore_patterns("__pycache__"))
-    return dest
-
 
 def _run(script: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
