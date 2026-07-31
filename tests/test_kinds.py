@@ -36,7 +36,7 @@ def test_a_blank_definition_is_rejected() -> None:
     with pytest.raises(KindError, match="defined in prose"):
 
         class Blank(Value):
-            """   """
+            """   """  # noqa: D419 — the emptiness IS the case under test
 
             h: ContentHash
 

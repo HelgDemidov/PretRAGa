@@ -51,6 +51,12 @@ package = false
 target-version = "py312"
 line-length = 110
 
+[tool.ruff.lint.per-file-ignores]
+# Throwaway negative-case classes assign pydantic's `model_config` dict; ruff
+# cannot see their BaseModel ancestry across modules, so RUF012 misfires here
+# (src/ is NOT exempted — the same idiom there is recognised and clean).
+"tests/test_kinds.py" = ["RUF012"]
+
 [tool.mypy]
 # No `files` here on purpose. mypy has no .gitignore support, and an exclude
 # list would be a second, hand-maintained copy of .gitignore that drifts from
