@@ -195,6 +195,38 @@ def _validate_vocabularies(data: dict) -> list[str]:
     return errors
 
 
+def edge_between(data: dict, a: str, b: str) -> str | None:
+    """The relation joining two entities, whichever way it is authored. Named
+    paths assert connectivity, not direction: the map records `CanonicalText ->
+    ProvenanceAnchor` while the provenance chain reads the other way round, and
+    both statements are true."""
+    for r in data["relations"]:
+        if {r["from"], r["to"]} == {a, b}:
+            return str(r["type"])
+    return None
+
+
+def _validate_paths(data: dict) -> list[str]:
+    """A named path is a claim that the map is connected from here to there.
+    Unlike prose, it fails the build the moment a hop stops existing."""
+    known = {e["id"] for e in data["entities"]}
+    errors: list[str] = []
+    for pid, spec in data.get("paths", {}).items():
+        if not str(spec.get("ru", "")).strip():
+            errors.append(f"path {pid} has no ru label")
+        hops = spec.get("hops") or []
+        if len(hops) < 2:
+            errors.append(f"path {pid}: needs at least two hops")
+            continue
+        for hop in hops:
+            if hop not in known:
+                errors.append(f"path {pid}: no such entity: {hop}")
+        for a, b in zip(hops, hops[1:], strict=False):
+            if a in known and b in known and edge_between(data, a, b) is None:
+                errors.append(f"path {pid}: {a} and {b} are not connected by any relation")
+    return errors
+
+
 def _validate_forbidden(data: dict, sources: set[str], targets: set[str]) -> list[str]:
     """A `forbidden` obligation broken is a classification error: either the
     kind is wrong or the fact is wrong. Fixable without a design decision."""
@@ -309,6 +341,7 @@ def validate(data: dict) -> list[str]:
 
     errors += _validate_forbidden(data, sources, targets)
     errors += _validate_layering(data)
+    errors += _validate_paths(data)
     return errors
 
 
@@ -596,6 +629,21 @@ def layer_section(data: dict) -> str:
     return "\n".join(out)
 
 
+def path_section(data: dict) -> str:
+    """Named paths rendered hop by hop, each hop labelled with the relation that
+    carries it. This is the claim the vision makes about provenance, shown as
+    the map actually holds it — not as anyone remembers it."""
+    ru = {e["id"]: e["ru"] for e in data["entities"]}
+    out: list[str] = []
+    for pid, spec in data.get("paths", {}).items():
+        hops = spec["hops"]
+        out.append(f"**`{pid}`** — {spec['ru']}\n")
+        for a, b in zip(hops, hops[1:], strict=False):
+            out.append(f"- {ru[a]} → {ru[b]} — `{edge_between(data, a, b)}`")
+        out.append("")
+    return "\n".join(out)
+
+
 def attribute_tables(data: dict) -> str:
     out: list[str] = []
     grouped = _by_group(data)
@@ -698,6 +746,13 @@ def render(data: dict) -> str:
             "(`settled`, `requires_trigger`), поэтому имена остаются данными.",
             "",
             vocabulary_tables(data),
+            "## Именованные пути",
+            "",
+            "Утверждения вида «отсюда дотуда карта связна». Путь падает вместе со",
+            "связью, которую он пересекает, — поэтому то, что видение объявляет несущей",
+            "конструкцией, здесь перестаёт быть словом и становится проверкой.",
+            "",
+            path_section(data),
             "## Слои и направление зависимости",
             "",
             "Порядок записи слоёв — и есть контракт: слой вправе зависеть от лежащего",

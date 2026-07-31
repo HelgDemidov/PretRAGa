@@ -76,8 +76,8 @@ omit = ["*/conftest.py", "*/test_*.py"]
 
 [tool.coverage.report]
 # A floor that catches regressions, not a goal. Measured with exactly the gate
-# command; raise it on organic growth only. The checker's real coverage is
-# higher than measured — its tests drive it as a subprocess, which coverage
-# does not see from the parent process.
-fail_under = 70
+# command and raised only on organic growth: 70 -> 90 when the checker's own
+# functions got in-process tests and its coverage went 31% -> 86%. Two points
+# of headroom on purpose — CI measures a hair lower than a local run.
+fail_under = 90
 show_missing = true

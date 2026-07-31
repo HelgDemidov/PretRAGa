@@ -16,6 +16,8 @@ stays justified for any subgraph of the map, not just for this one.
 from __future__ import annotations
 
 import copy
+import io
+import json
 import shutil
 import subprocess
 import sys
@@ -249,6 +251,193 @@ def test_anchor_requirement_follows_the_kind(data: dict[str, Any]) -> None:
     for e in data["entities"]:
         expected = data["kinds"][e["kind"]]["anchor"] == "required"
         assert build.anchor_required(data, e) is expected
+
+
+# --------------------------------------------------------------------------
+# named paths: the vision's load-bearing claims, as checks
+# --------------------------------------------------------------------------
+
+def test_every_named_path_is_connected_in_the_map(data: dict[str, Any]) -> None:
+    """§6 of the vision states the provenance chain as a load-bearing claim.
+    It was once wrong — the map had no Deliverable -> Claim edge, so the vision
+    asserted a link the truth did not contain, and nothing could tell."""
+    assert data.get("paths"), "no named paths — the test would be vacuous"
+    for pid, spec in data["paths"].items():
+        hops = spec["hops"]
+        for a, b in zip(hops, hops[1:], strict=False):
+            assert build.edge_between(data, a, b) is not None, f"{pid}: {a} — {b}"
+
+
+def test_a_broken_hop_fails_the_build(data: dict[str, Any]) -> None:
+    pid = next(iter(data["paths"]))
+    a, b = data["paths"][pid]["hops"][:2]
+    data["relations"] = [r for r in data["relations"] if {r["from"], r["to"]} != {a, b}]
+    assert any("are not connected by any relation" in e for e in build.validate(data))
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected"),
+    [
+        (lambda d: d["paths"][next(iter(d["paths"]))].update(hops=["Nowhere", "Deliverable"]),
+         "no such entity: Nowhere"),
+        (lambda d: d["paths"][next(iter(d["paths"]))].update(hops=["Deliverable"]),
+         "needs at least two hops"),
+        (lambda d: d["paths"][next(iter(d["paths"]))].update(ru="  "),
+         "has no ru label"),
+    ],
+    ids=["unknown hop", "too short", "no label"],
+)
+def test_malformed_path_is_rejected(data: dict[str, Any], mutate: Any, expected: str) -> None:
+    mutate(data)
+    assert any(expected in e for e in build.validate(data))
+
+
+def test_edge_between_is_direction_agnostic(data: dict[str, Any]) -> None:
+    """A path asserts connectivity, not direction: the map records
+    `CanonicalText -> ProvenanceAnchor` while the chain reads the other way."""
+    r = data["relations"][0]
+    assert build.edge_between(data, r["from"], r["to"]) == r["type"]
+    assert build.edge_between(data, r["to"], r["from"]) == r["type"]
+    assert build.edge_between(data, r["from"], r["from"]) is None
+
+
+# --------------------------------------------------------------------------
+# the checker, called in process
+#
+# The subprocess tests below stay: they are the only thing that exercises argv,
+# exit codes and the real entry points. These add what those cannot give —
+# assertions on the checker's own functions, which is also what makes its
+# coverage figure mean something. Measuring the subprocesses instead was
+# rejected: it costs ~6.5x per launch and needs a `coverage combine` step in
+# both the local gate and CI, and those two must stay identical.
+# --------------------------------------------------------------------------
+
+def test_load_map_reads_the_committed_map(data: dict[str, Any]) -> None:
+    assert check.load_map() == data
+
+
+def test_check_map_integrity_is_green_and_prefixes_its_errors(data: dict[str, Any]) -> None:
+    assert check.check_map_integrity(data) == []
+    data["entities"][0]["kind"] = "nonesuch"
+    assert all(e.startswith("map: ") for e in check.check_map_integrity(data))
+
+
+def test_check_generated_views_is_green_and_notices_staleness(data: dict[str, Any]) -> None:
+    assert check.check_generated_views(data) == []
+    data["entities"][0]["ru"] = "Переименовано"
+    assert any("stale or hand-edited" in e for e in check.check_generated_views(data))
+
+
+def test_check_anchors_reports_pending_while_src_is_absent(data: dict[str, Any]) -> None:
+    errors, info = check.check_anchors(data)
+    assert errors == []
+    owed = [e for e in data["entities"] if build.anchor_required(data, e)]
+    assert any(f"{len(owed)} entities without code anchors" in line for line in info)
+
+
+def test_check_anchors_errors_on_an_unresolvable_prefix(data: dict[str, Any]) -> None:
+    next(e for e in data["entities"] if build.anchor_required(data, e))["implements"] = ["nowhere/"]
+    errors, _ = check.check_anchors(data)
+    assert any("does not resolve" in e for e in errors)
+
+
+def test_check_orphans_is_silent_without_src(data: dict[str, Any]) -> None:
+    assert not check.SRC_ROOT.exists(), "src/ appeared — this test must be revisited"
+    assert check.check_orphans(data) == []
+
+
+def test_check_obligations_groups_by_what_is_missing(data: dict[str, Any]) -> None:
+    lines = check.check_obligations(data)
+    unmet = build.obligations(data)
+    assert lines[0].startswith(f"obligations: {len(unmet)} unmet")
+    assert len(lines) - 1 == len({row[2] for row in unmet})
+
+
+def test_run_checks_is_green_on_the_committed_map(
+    data: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert check.run_checks(data, quick=False) == 0
+    assert "ENTITY MAP CHECK: OK" in capsys.readouterr().out
+
+
+def test_run_checks_reports_and_fails_on_a_broken_map(
+    data: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    data["entities"][0]["kind"] = "nonesuch"
+    assert check.run_checks(data, quick=False) == 1
+    out = capsys.readouterr().out
+    assert "ENTITY MAP CHECK: 1 error(s)" in out and "unknown kind" in out
+
+
+def test_quick_mode_stays_terse(
+    data: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The hook report must not drown in advisory traffic; only demoted view
+    staleness is worth a line there."""
+    assert check.run_checks(data, quick=True) == 0
+    assert capsys.readouterr().out.strip() == "ENTITY MAP CHECK: OK"
+
+
+def test_demoted_staleness_surfaces_in_quick_mode(
+    data: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    data["entities"][0]["ru"] = "Переименовано"
+    assert check.run_checks(data, quick=True, demote_views=True) == 0
+    assert "expected while a tool is being edited" in capsys.readouterr().out
+
+
+def test_main_dispatches_every_mode(capsys: pytest.CaptureFixture[str]) -> None:
+    assert check.main([]) == 0
+    assert "ENTITY MAP CHECK: OK" in capsys.readouterr().out
+    assert check.main(["--quick"]) == 0
+    capsys.readouterr()
+    assert check.main(["--impact", str(build.SOURCE.relative_to(check.ROOT))]) == 0
+    assert "TRUTH ARTIFACT edited" in capsys.readouterr().out
+    assert check.main(["--removal-impact", "Corpus"]) == 0
+    assert "removal plan for: Corpus" in capsys.readouterr().out
+
+
+def test_hook_ignores_paths_the_map_does_not_govern(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The filter is what keeps the hook from firing on every unrelated edit."""
+    for rel in ("README.md", "some/notes.txt"):
+        monkeypatch.setattr(
+            sys, "stdin", io.StringIO(json.dumps({"tool_input": {"file_path": f"{check.ROOT}/{rel}"}}))
+        )
+        assert check.hook_mode() == 0
+        assert capsys.readouterr().out == "", f"{rel} should not have produced a report"
+
+
+def test_hook_ignores_a_path_outside_the_repository(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO(json.dumps({"tool_input": {"file_path": "/etc/hosts"}}))
+    )
+    assert check.hook_mode() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_hook_survives_malformed_input(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "stdin", io.StringIO("{ not json"))
+    assert check.hook_mode() == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_hook_reports_a_governed_edit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = {"tool_input": {"file_path": str(build.SOURCE)}}
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    assert check.hook_mode() == 0
+    out = json.loads(capsys.readouterr().out)
+    context = out["hookSpecificOutput"]["additionalContext"]
+    assert "change touches governed path" in context
+    assert "TRUTH ARTIFACT edited" in context
+    assert "decision" not in out, "a green map must not block"
 
 
 # --------------------------------------------------------------------------
