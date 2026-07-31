@@ -1,4 +1,10 @@
-"""Driven adapter: local BM25-class search over an embedded store."""
+"""Driven adapter for LexicalSearch — a SCAFFOLD, not an engine.
+
+Returns one canned hit for any non-blank query, so the conformance suite, the
+ring contracts and the composition root have a live input from day one. The
+real BM25-class adapter arrives with its stage's spec and replaces this via
+ONE Case entry in the conformance registry; nothing else changes.
+"""
 from __future__ import annotations
 
 from pretraga.domain.kinds import ContentHash
