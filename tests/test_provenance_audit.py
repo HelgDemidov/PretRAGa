@@ -134,6 +134,80 @@ def test_an_empty_corpus_reports_zero_records_rather_than_success() -> None:
     assert (n, broken) == (0, [])
 
 
+# ------------------------------------------------ a store that lies coherently
+#
+# The corruption modes above all break an invariant the store itself holds: a
+# hash stops matching its content. A store can lie without ever doing that.
+
+
+def test_a_substituted_answer_is_caught_even_though_it_is_self_consistent() -> None:
+    """The lookup lies, not the object. Every record the store hands back
+    hashes to its own declared key, so hashing catches nothing — measured: an
+    empty report while the evidence under the claim said the OPPOSITE of the
+    claim. Only comparing the answer to the key asked for finds it."""
+    store = build(["The Commission SHALL prohibit the practice."])
+    other = build(["The Commission MAY permit the practice, and then some."])
+    key = next(iter(other.texts))
+    substitute = other.texts[key]
+    store.texts = dict.fromkeys(store.texts, substitute)
+    store.raws |= other.raws
+    store.blobs |= other.blobs
+
+    _, broken = report(store)
+    assert any("not the evidence it names" in b for b in broken), broken
+
+
+def test_a_substituted_raw_payload_is_caught() -> None:
+    """The same lie one link further down: the conversion names one raw
+    payload, the store answers with another that is perfectly well formed."""
+    store = build(SAMPLE)
+    other = build(["a different source entirely"])
+    substitute = other.raws[next(iter(other.raws))]
+    store.raws = dict.fromkeys(store.raws, substitute)
+    store.blobs |= other.blobs
+
+    _, broken = report(store)
+    assert any("the store answered with" in b for b in broken), broken
+
+
+def test_the_examined_count_comes_from_the_audited_sample() -> None:
+    """Measured: a store answering claims() differently on each call reported
+    "200 records examined, nothing broken" having audited zero. The count IS
+    the honesty signal of this mechanism, so it may not come from a second
+    call the audit never saw."""
+
+    class MoodyStore(MemoryStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def claims(self, limit: int) -> list[Claim]:
+            self.calls += 1
+            return super().claims(limit) if self.calls == 1 else []
+
+    store = MoodyStore()
+    store.claim_list = build(SAMPLE).claim_list  # the texts are NOT loaded: every chain is broken
+    n, broken = report(store)
+    assert (n, len(broken)) == (3, 3), (n, broken)
+
+
+def test_a_message_names_which_record_is_broken() -> None:
+    """Two claims sharing a long opening — the norm in legal wording — used to
+    print the same line twice, so the operator could not tell them apart."""
+    opening = "In accordance with Article 5(1) of the Regulation, "
+    store = build([opening + "the practice is prohibited.",
+                   opening + "the practice is permitted."])
+    store.raws.clear()
+
+    _, broken = report(store)
+    assert len(broken) == 2
+    assert broken[0] != broken[1], broken
+    # every key printed in full, not to twelve characters: two records that
+    # differ only past the twelfth used to produce byte-identical messages
+    named = {k for k in store.texts if any(k in line for line in broken)}
+    assert named == set(store.texts), (named, broken)
+
+
 @settings(max_examples=50, deadline=None)
 @given(st.lists(st.text(min_size=1, max_size=40), min_size=1, max_size=6, unique=True))
 def test_any_intact_corpus_resolves(bodies: list[str]) -> None:
