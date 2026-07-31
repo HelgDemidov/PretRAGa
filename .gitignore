@@ -2,13 +2,17 @@
 .env
 
 # Internal working docs and process notes — not for public distribution.
-# Exception: docs/system_design/ is the architectural truth (entity map, glossary,
-# vision) — it MUST be versioned so its history and CI checks exist. Contents are
-# excluded first, then the truth subtree is re-included (a directory cannot be
-# re-included if the directory itself is excluded).
+# Two exceptions, both versioned on purpose. docs/system_design/ is the
+# architectural truth (entity map, glossary, vision): its history and its CI
+# checks have to exist. docs/backlog/ is the open-work register: an unversioned
+# backlog is one nobody sees and nobody updates, and it names nothing the
+# tracked hole registry in the truth README does not already say out loud.
+# Contents are excluded first, then the two subtrees are re-included (a
+# directory cannot be re-included if the directory itself is excluded).
 /CLAUDE.md
 /docs/*
 !/docs/system_design/
+!/docs/backlog/
 /.claude/
 /.serena/
 
