@@ -24,6 +24,9 @@ WATCHED = (ROOT / "src", ROOT / "tools", ROOT / "docs")
 
 def _snapshot() -> dict[str, str]:
     out: dict[str, str] = {}
+    lock = ROOT / "schema.lock.json"
+    if lock.exists():
+        out[lock.name] = hashlib.sha256(lock.read_bytes()).hexdigest()
     for root in WATCHED:
         for path in sorted(root.rglob("*")):
             if path.is_dir() or "__pycache__" in path.parts:
@@ -57,7 +60,7 @@ def ring(tmp_path: Path) -> Path:
 
     dest = tmp_path / "repo"
     dest.mkdir()
-    for name in ("src", "tools", "docs", "tests", "pyproject.toml"):
+    for name in ("src", "tools", "docs", "tests", "pyproject.toml", "schema.lock.json"):
         source = ROOT / name
         if source.is_dir():
             shutil.copytree(source, dest / name,

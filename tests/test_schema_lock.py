@@ -103,7 +103,7 @@ def test_the_lock_is_byte_identical_across_runs(tmp_path: Path) -> None:
 
 
 def test_a_missing_lock_blocks(ring: Path) -> None:
-    (ring / "docs" / "system_design" / "schema.lock.json").unlink()
+    (ring / "schema.lock.json").unlink()
     done = _run(ring)
     assert done.returncode == 1
     assert "missing" in done.stdout
@@ -135,7 +135,7 @@ def test_a_breaking_write_without_a_new_version_is_refused(ring: Path) -> None:
     """The version bump is the one human decision; --write must not absorb a
     breaking change under the stored version."""
     _edit(ring, "facts.py", "    extractor_version: int\n", "")
-    lock = ring / "docs" / "system_design" / "schema.lock.json"
+    lock = ring / "schema.lock.json"
     before = lock.read_bytes()
     done = _run_write(ring)
     assert done.returncode == 1, done.stdout
@@ -147,7 +147,7 @@ def test_a_breaking_write_with_a_new_version_succeeds(ring: Path) -> None:
     _edit(ring, "facts.py", "    extractor_version: int\n", "")
     done = _run_write(ring, "--version", "2.0.0")
     assert done.returncode == 0, done.stdout
-    lock = json.loads((ring / "docs" / "system_design" / "schema.lock.json").read_text())
+    lock = json.loads((ring / "schema.lock.json").read_text())
     assert lock["version"] == "2.0.0"
     assert _run(ring).returncode == 0
 
@@ -157,7 +157,7 @@ def test_an_additive_write_keeps_the_stored_version(ring: Path) -> None:
           "    lifecycle: Lifecycle\n    note: str | None = None")
     done = _run_write(ring)
     assert done.returncode == 0, done.stdout
-    lock = json.loads((ring / "docs" / "system_design" / "schema.lock.json").read_text())
+    lock = json.loads((ring / "schema.lock.json").read_text())
     assert lock["version"] == "1.0.0"
 
 

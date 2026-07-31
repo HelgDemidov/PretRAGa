@@ -40,7 +40,9 @@ from typing import Any
 from pydantic.fields import FieldInfo
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCK = ROOT / "docs" / "system_design" / "schema.lock.json"
+# Beside uv.lock: a lock is a machine-written, diff-reviewed baseline, not
+# documentation — the lockfile convention puts it at the repository root.
+LOCK = ROOT / "schema.lock.json"
 
 for _extra in (ROOT / "src", ROOT / "tools"):
     if str(_extra) not in sys.path:

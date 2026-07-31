@@ -98,7 +98,7 @@ def test_a_dynamic_import_escape_blocks(ring: Path, call: str) -> None:
 
 
 def test_a_stale_glossary_blocks(ring: Path) -> None:
-    glossary = ring / "docs" / "system_design" / "domain_glossary.md"
+    glossary = ring / "docs" / "design_truth" / "domain_glossary.md"
     glossary.write_text(glossary.read_text(encoding="utf-8") + "\nedited by hand\n",
                         encoding="utf-8")
     done = _run(ring)
@@ -107,7 +107,7 @@ def test_a_stale_glossary_blocks(ring: Path) -> None:
 
 
 def test_a_missing_glossary_blocks(ring: Path) -> None:
-    (ring / "docs" / "system_design" / "domain_glossary.md").unlink()
+    (ring / "docs" / "design_truth" / "domain_glossary.md").unlink()
     done = _run(ring)
     assert done.returncode == 1
     assert "missing" in done.stdout

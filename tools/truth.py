@@ -47,7 +47,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parents[1]
-GLOSSARY = ROOT / "docs" / "system_design" / "domain_glossary.md"
+GLOSSARY = ROOT / "docs" / "design_truth" / "domain_glossary.md"
 SRC = ROOT / "src"
 for _extra in (ROOT / "src", ROOT / "tools"):
     if str(_extra) not in sys.path:
@@ -304,7 +304,8 @@ def hook_mode() -> int:
     if not file_path.startswith(root + "/"):
         return 0
     rel = file_path[len(root) + 1:]
-    if not rel.startswith(("src/", "docs/system_design/", "tools/")):
+    if not (rel.startswith(("src/", "docs/design_truth/", "docs/core/", "tools/"))
+            or rel == "schema.lock.json"):
         return 0
     lines = [f"[truth] change touches governed path: {rel}"]
     buf = io.StringIO()
