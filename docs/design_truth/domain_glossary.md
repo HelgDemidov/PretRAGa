@@ -184,3 +184,9 @@ E.g. for int | str
 ## Errors
 
 - **SearchUnavailable** — The one exception a RAISES-mode port may signal unavailability with.
+
+## Tables
+
+Module-level data the domain declares. A table owes nothing beyond having a role: what it means is checked by the rules that read it. Listed by name only — the contents live in the code, and a second copy here would drift.
+
+- **FAILURE_MODES** (pretraga.domain.ports)

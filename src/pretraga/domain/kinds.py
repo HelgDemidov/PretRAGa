@@ -65,8 +65,6 @@ class _Concept(BaseModel):
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
-        if cls.__name__.startswith("_"):
-            return
         if not (cls.__doc__ or "").strip():
             raise KindError(
                 f"{cls.__name__}: a concept that cannot be defined in prose is not "
@@ -82,8 +80,6 @@ class Entity(_Concept):
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
-        if cls.__name__.startswith("_"):
-            return
         if "uuid" not in cls.model_fields:
             raise KindError(f"{cls.__name__}: an entity owes a minted identity")
         if cls.model_config.get("frozen"):
@@ -101,8 +97,6 @@ class Value(_Concept):
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
-        if cls.__name__.startswith("_"):
-            return
         if not cls.model_config.get("frozen"):
             raise KindError(f"{cls.__name__}: a value is frozen — it must not unset frozen")
 

@@ -84,6 +84,123 @@ def test_an_unclassified_name_blocks(ring: Path, name: str, filename: str,
     assert expected in done.stdout, done.stdout
 
 
+@pytest.mark.parametrize(
+    ("name", "filename", "body", "expected"),
+    [
+        ("a callable that is not a function", "y1.py", """
+            import functools
+            def _pick(table: dict[str, str], surface: str) -> str:
+                return table.get(surface, surface)
+            normalise = functools.partial(_pick, {"EC": "European Commission"})
+        """, "not a function"),
+        ("a concept nested inside a concept", "y2.py", '''
+            from pretraga.domain.kinds import Value
+            class Envelope(Value):
+                """A locked value carrying an unlocked one."""
+                class Meta(Value):
+                    """Nested, persisted, invisible."""
+                    weight: int
+                meta: Meta
+        ''', "nested inside a concept"),
+        ("a module-level __getattr__", "y3.py", '''
+            from typing import Any
+            from pretraga.domain.kinds import Value
+            def __getattr__(name: str) -> Any:
+                class Ghost(Value):
+                    """Materialised on access."""
+                    payload: str
+                return Ghost
+        ''', "only on access"),
+        ("a class that rewrites its __module__", "y4.py", '''
+            from pretraga.domain.kinds import Value
+            class Relocated(Value):
+                """A value that lies about where it lives."""
+                payload: str
+            Relocated.__module__ = "pretraga.domain.kinds"
+        ''', "surveyed nowhere"),
+        ("a value thawed after class creation", "y5.py", '''
+            from pretraga.domain.kinds import Value
+            class Thawed(Value):
+                """A value whose obligation was undone after it was created."""
+                payload: str
+            Thawed.model_config["frozen"] = False
+            Thawed.model_rebuild(force=True)
+        ''', "not frozen"),
+        ("a definition removed after class creation", "y6.py", '''
+            from pretraga.domain.kinds import Value
+            class Undefined(Value):
+                """This docstring does not survive the module."""
+                payload: str
+            Undefined.__doc__ = None
+        ''', "no docstring"),
+    ],
+)
+def test_a_surface_escape_blocks(ring: Path, name: str, filename: str,
+                                 body: str, expected: str) -> None:
+    """Ways a name left the public surface without leaving the code. Each was
+    measured passing the whole six-step gate before the check that names it."""
+    _plant(ring, filename, body)
+    done = _run(ring)
+    assert done.returncode == 1, f"{name} was accepted:\n{done.stdout}"
+    assert expected in done.stdout, done.stdout
+
+
+def test_a_duplicate_bare_name_blocks(ring: Path) -> None:
+    """Survey, glossary and lock all key on the bare name, so the second
+    declaration used to replace the first in silence — two live persisted
+    shapes, one locked entry, and the loser's shape guarded by nothing."""
+    _plant(ring, "y7.py", '''
+        from pretraga.domain.kinds import Value
+        class Claim(Value):
+            """A DIFFERENT Claim: same name, wrong shape."""
+            whatever: int
+    ''')
+    done = _run(ring)
+    assert done.returncode == 1, done.stdout
+    assert "declared in both" in done.stdout, done.stdout
+
+
+def test_a_ring_directory_without_an_initialiser_blocks(ring: Path) -> None:
+    """Measured: such a directory is invisible to this survey AND to
+    import-linter, so a domain module could reach the network from inside one
+    while all three contracts reported kept."""
+    sub = ring / "src" / "pretraga" / "domain" / "enrichment"
+    sub.mkdir()
+    (sub / "shapes.py").write_text(
+        '"""A stage subpackage that forgot its initialiser."""\n'
+        "from pretraga.domain.kinds import Value\n\n\n"
+        'class Buried(Value):\n    """A persisted value nobody surveys."""\n\n    payload: str\n',
+        encoding="utf-8")
+    done = _run(ring)
+    assert done.returncode == 1, done.stdout
+    assert "__init__.py" in done.stdout, done.stdout
+
+
+def test_a_private_class_bound_to_a_public_name_cannot_dodge_its_kind(ring: Path) -> None:
+    """The obligations used to skip any class whose name began with an
+    underscore, so a private class plus a public alias produced a mutable,
+    undefined Value that the whole gate accepted."""
+    _plant(ring, "y8.py", """
+        from pretraga.domain.kinds import Value
+        class _Loose(Value, frozen=False):
+            payload: str
+        Loose = _Loose
+    """)
+    done = _run(ring)
+    assert done.returncode == 1, done.stdout
+    assert "frozen" in done.stdout + done.stderr
+
+
+def test_module_level_data_has_a_role(ring: Path) -> None:
+    """FAILURE_MODES is the system's own registry and used to fall through the
+    survey's silent `else`, so 'every public name has a role' was already false
+    for the shipped ring."""
+    del ring
+    s = truth.survey()
+    assert "FAILURE_MODES" in s.tables
+    assert "FAILURE_MODES" in truth.render_glossary(s)
+
+
 @pytest.mark.parametrize("call", ["__import__('urllib.request')", "eval('1+1')", "exec('x=1')"])
 def test_a_dynamic_import_escape_blocks(ring: Path, call: str) -> None:
     """The ring contract is read statically, so it only holds while imports are
