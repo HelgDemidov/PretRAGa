@@ -44,9 +44,27 @@ class Mutation(NamedTuple):
 MUTATIONS = [
     # --- classifier -------------------------------------------------------
     Mutation("unclassified names never reported", TRUTH,
-             '    errors = [f"{n} ({s.module_of[n]}): {why}" for n, why in '
+             '    errors += [f"{n} ({s.module_of[n]}): {why}" for n, why in '
              "sorted(s.unclassified.items())]",
-             "    errors = []"),
+             "    pass"),
+    Mutation("structural escapes never reported", TRUTH,
+             "    errors = list(s.structural)", "    errors = []"),
+    Mutation("kind obligations not re-verified", TRUTH,
+             "    errors += kind_obligations(s)", "    pass"),
+    Mutation("ring directory without an initialiser accepted", TRUTH,
+             "    out.structural += _namespace_packages(package)", "    pass"),
+    Mutation("module-level __getattr__ accepted", TRUTH,
+             '        if "__getattr__" in vars(mod):', "        if False:"),
+    Mutation("a class may claim it lives elsewhere", TRUTH,
+             "            if declared_in != modname:", "            if False:"),
+    Mutation("duplicate bare names accepted", TRUTH,
+             "            if name in out.module_of:", "            if False:"),
+    Mutation("nested concepts accepted", TRUTH,
+             "    out.structural += _nested_concepts(out, entity, value)", "    pass"),
+    Mutation("public callable without a role accepted", TRUTH,
+             "    elif callable(obj):", "    elif False:"),
+    Mutation("assignments stop counting as declarations", TRUTH,
+             "        elif isinstance(node, ast.Assign):", "        elif False:"),
     Mutation("sum of non-concepts accepted", TRUTH, "        if stray:", "        if False:"),
     Mutation("vocabulary docstring not required", TRUTH,
              '        if not (voc.__doc__ or "").strip():', "        if False:"),
@@ -62,10 +80,7 @@ MUTATIONS = [
     Mutation("dynamic-import escapes ignored", TRUTH,
              '    errors += static_import_escapes(src / package.split(".")[0])\n', ""),
     Mutation("package initialiser skipped again", TRUTH,
-             '    return [package] + [i.name for i in pkgutil.walk_packages(root.__path__, '
-             'prefix=f"{package}.")]',
-             '    return [i.name for i in pkgutil.walk_packages(root.__path__, '
-             'prefix=f"{package}.")]'),
+             '    out = [(package, pkg_dir / "__init__.py")]', "    out = []"),
     Mutation("framework allowlist covers everything", TRUTH,
              '            if modname == f"{package}.kinds" and name in FRAMEWORK:',
              '            if modname == f"{package}.kinds":'),
@@ -78,6 +93,12 @@ MUTATIONS = [
              '        if cls.model_config.get("frozen"):', "        if False:"),
     Mutation("entity need not carry a minted identity", KINDS,
              '        if "uuid" not in cls.model_fields:', "        if False:"),
+    Mutation("private-name exemption reinstated", KINDS,
+             "        super().__pydantic_init_subclass__(**kwargs)\n"
+             '        if not cls.model_config.get("frozen"):',
+             "        super().__pydantic_init_subclass__(**kwargs)\n"
+             '        if cls.__name__.startswith("_"):\n            return\n'
+             '        if not cls.model_config.get("frozen"):'),
     # --- schema lock ------------------------------------------------------
     Mutation("removed field not breaking", LOCK,
              '            breaking.append(f"{name}.{f}: field removed")', "            pass"),

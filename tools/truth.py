@@ -12,12 +12,27 @@ is TOTAL — it keeps no list of names, so it cannot inflate and cannot go stale
   error          an Exception the domain owns (a port's declared failure is
                  raised as a domain type, never as an adapter's own)
   service        a public function (pure domain behaviour); owes a docstring
+  table          module-level data the domain declares (FAILURE_MODES is one)
   unclassified   ERROR: it entered the domain without a role
+
+WHAT counts as the public surface is decided from the SOURCE, not from the
+module dict: a name the module DECLARES (class, def, assignment, type alias)
+owes a role, a name it merely IMPORTS is surveyed where it is declared. Reading
+the module dict instead made the survey both too wide and too narrow — too wide
+because `annotations`, `hashlib` and `ClassVar` are public entries in it, and
+too narrow because everything that was not a class or a function fell through a
+silent `else`, which is how FAILURE_MODES ended up with no role at all.
 
 The framework module (kinds.py) is surveyed like any other, minus an explicit
 CLOSED allowlist of the framework names themselves — so nothing can be smuggled
 in beside them (measured: before this, a class planted in kinds.py escaped the
 survey entirely, and so did anything in the package __init__).
+
+Four ways a name used to leave the surface without leaving the code, each now
+refused where it happens: a subpackage with no __init__.py (measured: unseen by
+this survey AND by import-linter, so a domain module could reach the network
+from one), a concept nested inside another concept, a module-level __getattr__,
+and a class whose __module__ names somewhere it was not declared.
 
 Whether a port has an implementation is NOT decided here. Two ports with the
 same method names are indistinguishable by shape, so a structural count reports
@@ -36,7 +51,6 @@ import ast
 import enum
 import importlib
 import inspect
-import pkgutil
 import sys
 import types
 import typing
@@ -75,8 +89,12 @@ class Survey:
     aliases: dict[str, object] = field(default_factory=dict)
     services: dict[str, object] = field(default_factory=dict)
     errors: dict[str, type] = field(default_factory=dict)
+    tables: dict[str, object] = field(default_factory=dict)
     unclassified: dict[str, str] = field(default_factory=dict)
     module_of: dict[str, str] = field(default_factory=dict)
+    structural: list[str] = field(default_factory=list)
+    """Ways a name left the surface without leaving the code. Collected while
+    walking, because the walk is the only place that knows where it happened."""
 
 
 def _is_port(obj: object) -> typing.TypeGuard[type]:
@@ -85,14 +103,70 @@ def _is_port(obj: object) -> typing.TypeGuard[type]:
     return isinstance(obj, type) and bool(getattr(obj, "_is_protocol", False))
 
 
-def _module_names(package: str) -> list[str]:
-    """Every module of the ring INCLUDING the package initialiser.
+def _ring_dir(package: str) -> Path:
+    return Path(next(iter(importlib.import_module(package).__path__)))
 
-    walk_packages does not yield the package's own __init__, so a class defined
-    there escaped classification entirely — measured, and the likeliest place
-    for one to appear, since that is where convenience code goes."""
-    root = importlib.import_module(package)
-    return [package] + [i.name for i in pkgutil.walk_packages(root.__path__, prefix=f"{package}.")]
+
+def _module_names(package: str) -> list[tuple[str, Path]]:
+    """Every module of the ring INCLUDING the package initialiser, discovered
+    from the FILESYSTEM rather than from pkgutil.
+
+    Two measured escapes closed at once. walk_packages does not yield the
+    package's own __init__, so a class defined there escaped classification
+    entirely — and that is the likeliest place for one to appear, since it is
+    where convenience code goes. It also skips any directory without an
+    __init__.py, so a whole subpackage could sit in the ring unsurveyed."""
+    pkg_dir = _ring_dir(package)
+    out = [(package, pkg_dir / "__init__.py")]
+    for py in sorted(pkg_dir.rglob("*.py")):
+        rel = py.relative_to(pkg_dir)
+        if "__pycache__" in rel.parts:
+            continue
+        if rel.name == "__init__.py":
+            if rel.parent != Path("."):
+                out.append((f"{package}." + ".".join(rel.parent.parts), py))
+        else:
+            out.append((f"{package}." + ".".join([*rel.parent.parts, rel.stem]), py))
+    return out
+
+
+def _namespace_packages(package: str) -> list[str]:
+    """Directories of the ring that carry modules but no __init__.py.
+
+    Measured, and the reason this is an error rather than a tolerated style: a
+    domain module in such a directory importing urllib left import-linter
+    reporting `Analyzed 23 files ... 3 kept, 0 broken`. The same directory with
+    an __init__.py broke the contract immediately. Two of the three drift
+    surfaces go blind together, so the directory is refused, not surveyed."""
+    pkg_dir = _ring_dir(package)
+    out = []
+    for d in sorted(p for p in pkg_dir.rglob("*") if p.is_dir()):
+        if "__pycache__" in d.parts or not any(d.glob("*.py")):
+            continue
+        if not (d / "__init__.py").exists():
+            out.append(f"{d.relative_to(pkg_dir.parent.parent)}: a ring directory with modules "
+                       "and no __init__.py — neither this survey nor import-linter sees inside")
+    return out
+
+
+def _declared_names(path: Path) -> set[str]:
+    """The public names a module DECLARES, read from its source.
+
+    The module dict cannot answer this: it also holds everything imported, so
+    `annotations`, `hashlib` and `ClassVar` look exactly like model surface. A
+    declaration is a class, a def, a type alias or an assignment; anything else
+    in the dict arrived by import and is surveyed where it was declared."""
+    out: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            out.add(node.name)
+        elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+            out.add(node.name.id)
+        elif isinstance(node, ast.Assign):
+            out.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            out.add(node.target.id)
+    return {n for n in out if not n.startswith("_")}
 
 
 def _is_union(obj: object) -> bool:
@@ -110,52 +184,122 @@ def _union_args(obj: object) -> tuple[object, ...]:
     return typing.get_args(inner)
 
 
+def _classify(out: Survey, name: str, obj: typing.Any, entity: typing.Any, value: typing.Any) ->None:
+    """Every declared public name lands in exactly one bucket. There is no
+    silent `else`: the one that used to be here is why FAILURE_MODES — the
+    system's own port registry — carried no role at all."""
+    if isinstance(obj, type) and issubclass(obj, (entity, value)):
+        out.concepts[name] = obj
+    elif _is_port(obj):
+        out.ports[name] = obj
+    elif isinstance(obj, type) and issubclass(obj, enum.Enum):
+        out.vocabularies[name] = obj
+    elif _is_union(obj):
+        out.sums[name] = obj
+    elif isinstance(obj, typing.NewType):
+        out.aliases[name] = obj
+    elif inspect.isfunction(obj):
+        out.services[name] = obj
+    elif isinstance(obj, type) and issubclass(obj, BaseException):
+        out.errors[name] = obj
+    elif isinstance(obj, type) and issubclass(obj, BaseModel):
+        out.unclassified[name] = ("a pydantic model in domain/ that is neither an "
+                                  "Entity nor a Value — give it a kind")
+    elif isinstance(obj, type):
+        out.unclassified[name] = "a public class in domain/ with no kind"
+    elif isinstance(obj, typing.TypeAliasType):
+        out.unclassified[name] = ("a type alias in domain/ that is not a sum of "
+                                  "concepts — make it a NewType or a sum")
+    elif callable(obj):
+        out.unclassified[name] = ("public domain behaviour that is not a function — a partial "
+                                  "or a callable instance owes the same definition a service "
+                                  "does; make it a def")
+    else:
+        out.tables[name] = obj
+
+
+def _nested_concepts(s: Survey, entity: typing.Any, value: typing.Any) ->list[str]:
+    """A concept declared inside another concept is addressable, persisted and
+    invisible: the survey reads module level, so the inner shape never reaches
+    the lock while travelling inside every record of the outer one."""
+    out = []
+    for name in sorted(s.concepts):
+        for inner, obj in sorted(vars(s.concepts[name]).items()):
+            if inner.startswith("_") or not isinstance(obj, type):
+                continue
+            if issubclass(obj, (entity, value)):
+                out.append(f"{name}.{inner} ({s.module_of[name]}): a concept nested inside a "
+                           "concept reaches neither the glossary nor the lock, yet its shape is "
+                           "persisted inside every outer record — declare it at module level")
+    return out
+
+
 def survey(package: str = PACKAGE) -> Survey:
     kinds = importlib.import_module(f"{package}.kinds")
     entity, value = kinds.Entity, kinds.Value
     out = Survey()
-    for modname in _module_names(package):
+    out.structural += _namespace_packages(package)
+    for modname, path in _module_names(package):
         mod = importlib.import_module(modname)
-        for name, obj in vars(mod).items():
-            if name.startswith("_"):
-                continue
+        if "__getattr__" in vars(mod):
+            out.structural.append(
+                f"{modname}: a module-level __getattr__ — a name that exists only on access is "
+                "invisible to any survey of the module; bind it at module level instead")
+        for name in sorted(_declared_names(path)):
             if modname == f"{package}.kinds" and name in FRAMEWORK:
                 continue
-            if isinstance(obj, type) and getattr(obj, "__module__", None) != modname:
-                continue  # imported from a sibling; surveyed where it is declared
-            if inspect.isfunction(obj) and obj.__module__ != modname:
+            if name not in vars(mod):
+                continue  # declared under a conditional the import did not take
+            obj = vars(mod)[name]
+            declared_in = getattr(obj, "__module__", modname) if isinstance(obj, type) else modname
+            if declared_in != modname:
+                out.structural.append(
+                    f"{name} ({modname}): declared here but reports __module__={declared_in}, "
+                    "so it is skipped here as an import and absent there — surveyed nowhere")
                 continue
-            if isinstance(obj, type) and issubclass(obj, (entity, value)):
-                out.concepts[name] = obj
-            elif _is_port(obj):
-                out.ports[name] = obj
-            elif isinstance(obj, type) and issubclass(obj, enum.Enum):
-                out.vocabularies[name] = obj
-            elif _is_union(obj):
-                out.sums[name] = obj
-            elif isinstance(obj, typing.NewType):
-                out.aliases[name] = obj
-            elif inspect.isfunction(obj):
-                out.services[name] = obj
-            elif isinstance(obj, type) and issubclass(obj, BaseException):
-                out.errors[name] = obj
-            elif isinstance(obj, type) and issubclass(obj, BaseModel):
-                out.unclassified[name] = ("a pydantic model in domain/ that is neither an "
-                                          "Entity nor a Value — give it a kind")
-            elif isinstance(obj, type):
-                out.unclassified[name] = "a public class in domain/ with no kind"
-            elif isinstance(obj, typing.TypeAliasType):
-                out.unclassified[name] = ("a type alias in domain/ that is not a sum of "
-                                          "concepts — make it a NewType or a sum")
-            else:
+            if name in out.module_of:
+                out.structural.append(
+                    f"{name}: declared in both {out.module_of[name]} and {modname} — survey, "
+                    "glossary and lock all key on the bare name, so one silently replaces the "
+                    "other and its shape stops being guarded")
                 continue
+            _classify(out, name, obj, entity, value)
             out.module_of[name] = modname
+    out.structural += _nested_concepts(out, entity, value)
     return out
+
+
+def kind_obligations(s: Survey) -> list[str]:
+    """The kind obligations, re-checked over what the survey actually found.
+
+    kinds.py enforces them once, at class creation. That is edge-triggered, and
+    measured: `Model.model_config["frozen"] = False` plus a rebuild produces a
+    mutable Value that every check accepted, because nothing looked again. The
+    class-creation hook is still the thing that makes a violator impossible to
+    write; this is the level-triggered reading of the same rule."""
+    kinds = importlib.import_module(_KINDS_MODULE)
+    errors = []
+    for name in sorted(s.concepts):
+        cls = s.concepts[name]
+        if not (cls.__doc__ or "").strip():
+            errors.append(f"concept {name}: no docstring — a concept that cannot be defined in "
+                          "prose is not ready to enter the domain")
+        if issubclass(cls, kinds.Value) and not cls.model_config.get("frozen"):
+            errors.append(f"concept {name}: a value that is not frozen — immutability is the "
+                          "obligation of the kind, and it was removed after class creation")
+        if issubclass(cls, kinds.Entity):
+            if "uuid" not in cls.model_fields:
+                errors.append(f"concept {name}: an entity without a minted identity")
+            if cls.model_config.get("frozen"):
+                errors.append(f"concept {name}: an entity has a lifecycle, so it is not frozen")
+    return errors
 
 
 def classification_errors(s: Survey) -> list[str]:
     kinds = importlib.import_module(_KINDS_MODULE)
-    errors = [f"{n} ({s.module_of[n]}): {why}" for n, why in sorted(s.unclassified.items())]
+    errors = list(s.structural)
+    errors += [f"{n} ({s.module_of[n]}): {why}" for n, why in sorted(s.unclassified.items())]
+    errors += kind_obligations(s)
     for name, obj in sorted(s.sums.items()):
         stray = [getattr(m, "__name__", str(m)) for m in _union_args(obj)
                  if not (isinstance(m, type) and issubclass(m, (kinds.Entity, kinds.Value)))]
@@ -253,6 +397,12 @@ def render_glossary(s: Survey) -> str:
     for name in sorted(s.errors):
         first = inspect.cleandoc(s.errors[name].__doc__ or "").splitlines()[0]
         out.append(f"- **{name}** — {first}")
+    out.extend(["", "## Tables", "",
+                ("Module-level data the domain declares. A table owes nothing beyond having a "
+                 "role: what it means is checked by the rules that read it. Listed by name only "
+                 "— the contents live in the code, and a second copy here would drift."), ""])
+    for name in sorted(s.tables):
+        out.append(f"- **{name}** ({s.module_of[name]})")
     out.append("")
     return "\n".join(out)
 
@@ -281,7 +431,7 @@ def run(glossary: Path = GLOSSARY, package: str = PACKAGE, src: Path = SRC) -> i
     print(f"TRUTH: OK — {len(s.concepts)} concepts ({n_entities} entities, "
           f"{len(s.concepts) - n_entities} values), {len(s.ports)} ports, "
           f"{len(s.sums)} sums, {len(s.vocabularies)} vocabularies, "
-          f"{len(s.services)} services, {len(s.errors)} errors")
+          f"{len(s.services)} services, {len(s.errors)} errors, {len(s.tables)} tables")
     if opens:
         print(f"  i {len(opens)} open question(s): "
               + ", ".join(f"{k}×{v}" for k, v in sorted(by_trigger.items())))
