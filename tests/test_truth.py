@@ -14,10 +14,23 @@ import pytest
 import truth
 
 
+def _ENV(ring: Path) -> dict[str, str]:
+    """PYTHONDONTWRITEBYTECODE is not a tidiness setting here.
+
+    Measured: a subprocess left `__pycache__` in the ring, a later edit changed
+    the file to the SAME length within the SAME second, and every subsequent
+    subprocess imported the stale bytecode — the check under test ran against
+    code that no longer existed and reported OK. A green test that proves
+    nothing is worse than a red one.
+    """
+    return {"PYTHONPATH": str(ring / "src"), "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1"}
+
+
 def _run(ring: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "tools/truth.py"], cwd=ring, capture_output=True, text=True,
-        env={"PYTHONPATH": str(ring / "src"), "PATH": "/usr/bin:/bin"}, check=False)
+        env=_ENV(ring), check=False)
 
 
 def _plant(ring: Path, filename: str, body: str) -> None:
@@ -295,7 +308,7 @@ def _run_hook(ring: Path, file_path: str) -> tuple[int, str]:
     done = subprocess.run(
         [sys.executable, "tools/truth.py", "--hook"], cwd=ring, capture_output=True,
         text=True, input=f'{{"tool_input": {{"file_path": "{file_path}"}}}}',
-        env={"PYTHONPATH": str(ring / "src"), "PATH": "/usr/bin:/bin"}, check=False)
+        env=_ENV(ring), check=False)
     return done.returncode, done.stdout
 
 

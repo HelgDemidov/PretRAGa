@@ -1,74 +1,100 @@
 {
   "shape": {
     "AcquisitionAct": {
+      "computed": {},
       "config": {},
       "fields": {
         "brought": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "tuple[pretraga.domain.kinds.ContentHash, ...]"
+          "serialization_alias": null,
+          "type": "tuple[pretraga.domain.kinds.ContentHash, ...]",
+          "validation_alias": null
         },
         "channel": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         },
         "occurred_at": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     },
     "AcquisitionChannel": {
+      "computed": {},
       "config": {},
       "fields": {
         "connector_type": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "lifecycle": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.acquisition.ChannelLifecycle"
+          "serialization_alias": null,
+          "type": "pretraga.domain.acquisition.ChannelLifecycle",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     },
     "Answer": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -77,22 +103,30 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "tuple[pretraga.domain.provenance.ProvenanceAnchor, ...]"
+          "serialization_alias": null,
+          "type": "tuple[pretraga.domain.provenance.ProvenanceAnchor, ...]",
+          "validation_alias": null
         },
         "text": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "CanonicalText": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -101,28 +135,38 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "content_hash": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         },
         "conversion": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.ConversionRecord"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.ConversionRecord",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ChannelLifecycle": {
       "kind": "vocabulary",
@@ -132,6 +176,7 @@
       ]
     },
     "CharSpan": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -142,9 +187,12 @@
             "Ge(ge=0)"
           ],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "start": {
           "alias": null,
@@ -152,14 +200,19 @@
             "Ge(ge=0)"
           ],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "Claim": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -168,38 +221,52 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.ProvenanceAnchor"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.ProvenanceAnchor",
+          "validation_alias": null
         },
         "extractor_version": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "label": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.ProvenanceLabel"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.ProvenanceLabel",
+          "validation_alias": null
         },
         "normalized": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ContentVersion": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -208,30 +275,41 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "language": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "payload": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ConversionRecord": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -240,28 +318,38 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "converter_name": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "source": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "CoordinateScheme": {
       "kind": "vocabulary",
@@ -280,44 +368,59 @@
       ]
     },
     "Deliverable": {
+      "computed": {},
       "config": {},
       "fields": {
         "body": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "stamp": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.synthesis.DerivationManifest"
+          "serialization_alias": null,
+          "type": "pretraga.domain.synthesis.DerivationManifest",
+          "validation_alias": null
         },
         "title": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     },
     "DerivationManifest": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -326,66 +429,90 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "tuple[tuple[str, int], ...]"
+          "serialization_alias": null,
+          "type": "tuple[tuple[str, int], ...]",
+          "validation_alias": null
         },
         "registry_commit": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "Document": {
+      "computed": {},
       "config": {},
       "fields": {
         "channel": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         },
         "lifecycle": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.document.Lifecycle"
+          "serialization_alias": null,
+          "type": "pretraga.domain.document.Lifecycle",
+          "validation_alias": null
         },
         "origin": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "tuple[pretraga.domain.document.OriginCoordinate, ...]"
+          "serialization_alias": null,
+          "type": "tuple[pretraga.domain.document.OriginCoordinate, ...]",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         },
         "versions": {
           "alias": null,
           "constraints": [],
           "default": "()",
+          "discriminator": null,
           "factory": null,
           "required": false,
-          "type": "tuple[pretraga.domain.document.ContentVersion, ...]"
+          "serialization_alias": null,
+          "type": "tuple[pretraga.domain.document.ContentVersion, ...]",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     },
     "FailureMode": {
       "kind": "vocabulary",
@@ -396,6 +523,7 @@
       ]
     },
     "Fragment": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -404,28 +532,38 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "span": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.CharSpan"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.CharSpan",
+          "validation_alias": null
         },
         "text_hash": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "Lifecycle": {
       "kind": "vocabulary",
@@ -436,6 +574,7 @@
       ]
     },
     "OriginCoordinate": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -444,22 +583,30 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.document.CoordinateScheme"
+          "serialization_alias": null,
+          "type": "pretraga.domain.document.CoordinateScheme",
+          "validation_alias": null
         },
         "value": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ProvenanceAnchor": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -468,28 +615,38 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.CharSpan"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.CharSpan",
+          "validation_alias": null
         },
         "text_hash": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         },
         "version_key": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ProvenanceLabel": {
       "kind": "vocabulary",
@@ -508,6 +665,7 @@
       ]
     },
     "RawPayload": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -516,20 +674,27 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         },
         "media_type": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "ReferenceType": {
       "kind": "vocabulary",
@@ -541,6 +706,7 @@
       ]
     },
     "Refusal": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -549,14 +715,19 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "SearchHit": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -565,22 +736,30 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.provenance.ProvenanceAnchor"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.ProvenanceAnchor",
+          "validation_alias": null
         },
         "score": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.float"
+          "serialization_alias": null,
+          "type": "builtins.float",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "StaleWarning": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -589,14 +768,19 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "Translation": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -605,74 +789,101 @@
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "language": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "of_text": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.ContentHash"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.ContentHash",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "TriageVerdict": {
+      "computed": {},
       "config": {},
       "fields": {
         "decision": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.acquisition.Decision"
+          "serialization_alias": null,
+          "type": "pretraga.domain.acquisition.Decision",
+          "validation_alias": null
         },
         "document": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         },
         "policy_version": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.int"
+          "serialization_alias": null,
+          "type": "builtins.int",
+          "validation_alias": null
         },
         "reason": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     },
     "Trigger": {
       "kind": "vocabulary",
@@ -685,6 +896,7 @@
       ]
     },
     "TypedReference": {
+      "computed": {},
       "config": {
         "frozen": "True"
       },
@@ -693,58 +905,79 @@
           "alias": null,
           "constraints": [],
           "default": "None",
+          "discriminator": null,
           "factory": null,
           "required": false,
-          "type": "pretraga.domain.provenance.ProvenanceAnchor | None"
+          "serialization_alias": null,
+          "type": "pretraga.domain.provenance.ProvenanceAnchor | None",
+          "validation_alias": null
         },
         "kind": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.facts.ReferenceType"
+          "serialization_alias": null,
+          "type": "pretraga.domain.facts.ReferenceType",
+          "validation_alias": null
         },
         "source": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         },
         "target_coordinate": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "builtins.str"
+          "serialization_alias": null,
+          "type": "builtins.str",
+          "validation_alias": null
         }
       },
-      "kind": "value"
+      "kind": "value",
+      "serializers": []
     },
     "WorldEntity": {
+      "computed": {},
       "config": {},
       "fields": {
         "surface_forms": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "tuple[str, ...]"
+          "serialization_alias": null,
+          "type": "tuple[str, ...]",
+          "validation_alias": null
         },
         "uuid": {
           "alias": null,
           "constraints": [],
           "default": null,
+          "discriminator": null,
           "factory": null,
           "required": true,
-          "type": "pretraga.domain.kinds.MintedId"
+          "serialization_alias": null,
+          "type": "pretraga.domain.kinds.MintedId",
+          "validation_alias": null
         }
       },
-      "kind": "entity"
+      "kind": "entity",
+      "serializers": []
     }
   },
   "version": "1.0.0"
