@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import subprocess
 import sys
 import typing
 from pathlib import Path
@@ -74,22 +75,55 @@ def _type_name(annotation: Any) -> str:
     return str(annotation).replace("typing.", "")
 
 
+def _factory_name(factory: Any) -> str:
+    """A factory is named by module AND qualname — never by repr, which can
+    embed a memory address and would make the lock differ between runs.
+
+    Measured: the bare qualname is not identity. Two modules each with a helper
+    called `_default` both record `_default`, so swapping one for the other
+    changed the default of every record that omitted the field under a green
+    gate. Qualifying by module closes that; two lambdas in ONE class body still
+    collide, which is why a lambda factory is refused outright below."""
+    qual, mod = getattr(factory, "__qualname__", None), getattr(factory, "__module__", None)
+    return f"{mod}.{qual}" if qual and mod else str(factory)
+
+
 def _field_contract(finfo: FieldInfo) -> dict[str, Any]:
     factory = finfo.default_factory
     return {
         "type": _type_name(finfo.annotation),
         "required": finfo.is_required(),
         # A default is part of the persisted contract: changing it silently
-        # rewrites the meaning of every record that omitted the field. A
-        # factory is named by qualname — its repr can embed a memory address,
-        # which would make the lock differ between runs.
+        # rewrites the meaning of every record that omitted the field.
         "default": repr(finfo.default) if not finfo.is_required() and factory is None else None,
-        "factory": getattr(factory, "__qualname__", str(factory)) if factory is not None else None,
+        "factory": _factory_name(factory) if factory is not None else None,
         # Constraints travel with the field: tightening one rejects records
         # that used to load.
         "constraints": sorted(repr(m) for m in (finfo.metadata or [])),
+        # THREE alias channels, not one. `alias` alone left two of them
+        # unrecorded, and each is a persisted-data change: renaming the
+        # validation alias makes yesterday's record fail to load (measured:
+        # REJECTED, "missing"), renaming the serialisation alias writes every
+        # new record under a different key.
         "alias": finfo.alias,
+        "validation_alias": None if finfo.validation_alias is None else str(finfo.validation_alias),
+        "serialization_alias": finfo.serialization_alias,
+        # The tag rule of a union: dropping it does not change the members, so
+        # the type name stays identical while a record that used to be rejected
+        # starts loading as whichever shape happens to match first.
+        "discriminator": finfo.discriminator,
     }
+
+
+def _serializers(model: Any) -> list[str]:
+    """Custom serialisers, by the fields they rewrite. They change what is
+    written without changing any field, so nothing else in this contract moves
+    when one is added, removed or repointed."""
+    dec = model.__pydantic_decorators__
+    out = [f"field({','.join(sorted(d.info.fields))}):{d.info.mode}"
+           for d in dec.field_serializers.values()]
+    out += [f"model:{d.info.mode}" for d in dec.model_serializers.values()]
+    return sorted(out)
 
 
 def derive(package: str = "pretraga.domain") -> dict[str, Any]:
@@ -100,12 +134,27 @@ def derive(package: str = "pretraga.domain") -> dict[str, Any]:
     shape: dict[str, Any] = {}
     for name in sorted(s.concepts):
         model = s.concepts[name]
+        for fname, fi in model.model_fields.items():
+            if fi.default_factory is not None and "<lambda>" in _factory_name(fi.default_factory):
+                raise ValueError(
+                    f"SCHEMA: {name}.{fname} defaults to a lambda. A factory is identified by "
+                    "module and qualname, and every lambda in one scope shares a qualname — so "
+                    "swapping one for another rewrites the default of every record that omitted "
+                    "the field with nothing to show for it. Give the factory a name.")
         shape[name] = {
             # The kind is decided by the base class, never guessed from a
             # field name: a Value that happens to carry a field called `uuid`
             # is still a Value.
             "kind": "entity" if issubclass(model, kinds.Entity) else "value",
             "fields": {fname: _field_contract(fi) for fname, fi in model.model_fields.items()},
+            # A computed field is absent from model_fields and present in every
+            # persisted record. Measured: adding one, plus a field serialiser,
+            # moved the wire format from {"amount_cents":350} to
+            # {"amount_cents":"350c","amount":3.5} while this entry stayed
+            # byte-identical.
+            "computed": {n: {"type": _type_name(ci.return_type), "alias": ci.alias}
+                         for n, ci in model.model_computed_fields.items()},
+            "serializers": _serializers(model),
             # The whole config, not just `frozen`: switching extra from allow
             # to forbid rejects records that used to load, and locking one key
             # while ignoring the rest is a guarantee with a hole in it.
@@ -168,14 +217,69 @@ def classify(old: dict[str, Any], new: dict[str, Any]) -> tuple[list[str], list[
             elif set(b.get("constraints") or []) - set(a.get("constraints") or []):
                 breaking.append(f"{name}.{f}: constraint tightened — records that used to load "
                                 "may now be rejected")
-            elif a.get("alias") != b.get("alias"):
-                breaking.append(f"{name}.{f}: serialisation alias "
-                                f"{a.get('alias')} -> {b.get('alias')}")
+            else:
+                for key, why in (
+                        ("alias", "alias"),
+                        ("validation_alias",
+                         ("validation alias — records stored under the old name stop loading")),
+                        ("serialization_alias",
+                         ("serialisation alias — new records are written under a different name")),
+                        ("discriminator",
+                         ("union discriminator — the tag rule deciding which shape a record is"))):
+                    if a.get(key) != b.get(key):
+                        breaking.append(f"{name}.{f}: {why} {a.get(key)} -> {b.get(key)}")
+        ocf, ncf = o.get("computed", {}), n.get("computed", {})
+        for f in sorted(set(ocf) - set(ncf)):
+            breaking.append(f"{name}.{f}: computed field removed — it is written into every record")
+        for f in sorted(set(ncf) - set(ocf)):
+            additive.append(f"{name}.{f}: new computed field")
+        for f in sorted(set(ocf) & set(ncf)):
+            if ocf[f] != ncf[f]:
+                breaking.append(f"{name}.{f}: computed field {ocf[f]} -> {ncf[f]}")
+        if o.get("serializers", []) != n.get("serializers", []):
+            breaking.append(f"{name}: serialisers {o.get('serializers', [])} -> "
+                            f"{n.get('serializers', [])} — the written form of an existing field "
+                            "changes without the field changing")
         oc, nc = o.get("config", {}), n.get("config", {})
         for k in sorted(set(oc) | set(nc)):
             if oc.get(k) != nc.get(k):
                 breaking.append(f"{name}: model_config[{k}] {oc.get(k)} -> {nc.get(k)}")
     return breaking, additive
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def _lock_at(lock_path: Path, ref: str) -> dict[str, Any] | None:
+    """The lock as git has it at `ref`. The version decision is enforced
+    against HISTORY, not against a file on disk: measured, `rm
+    schema.lock.json && --write --version <the version already stored>`
+    absorbed a breaking change, left the version line of the diff untouched,
+    and the gate said OK."""
+    raw = _git(lock_path.parent, "show", f"{ref}:./{lock_path.name}")
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def _base_lock(lock_path: Path) -> tuple[str, dict[str, Any]] | None:
+    """The lock as of the point this branch left the trunk."""
+    for trunk in ("origin/main", "main"):
+        merge = _git(lock_path.parent, "merge-base", "HEAD", trunk)
+        if merge is None:
+            continue
+        stored = _lock_at(lock_path, merge.strip())
+        if stored is not None:
+            return trunk, stored
+    return None
 
 
 def check(package: str = "pretraga.domain", lock_path: Path = LOCK) -> int:
@@ -184,6 +288,21 @@ def check(package: str = "pretraga.domain", lock_path: Path = LOCK) -> int:
         print(f"SCHEMA: {lock_path.name} is missing — run --write")
         return 1
     locked = json.loads(lock_path.read_text(encoding="utf-8"))
+    base = _base_lock(lock_path)
+    if base is None:
+        print("SCHEMA: NOTHING COMPARED against history — no base lock reachable in git, so the "
+              "version rule checked nothing this run")
+    else:
+        trunk, stored = base
+        drift, _ = classify(stored["shape"], locked["shape"])
+        if drift and stored["version"] == locked["version"]:
+            print(f"SCHEMA: {len(drift)} breaking change(s) in the lock against {trunk} "
+                  f"(v{stored['version']}) with the version unchanged")
+            for d in drift:
+                print(f"  - {d}")
+            print("  fix: the bump is the human decision; a rewritten lock file is not evidence "
+                  "that it was taken")
+            return 1
     breaking, additive = classify(locked["shape"], fresh)
     if breaking:
         print(f"SCHEMA: {len(breaking)} BREAKING change(s) against v{locked['version']}")
@@ -206,8 +325,13 @@ def write(package: str, version: str | None, lock_path: Path) -> int:
     the machine refuses to absorb a breaking change under the stored version:
     without a NEW --version, breaking changes do not get recorded."""
     fresh = derive(package)
-    if lock_path.exists():
-        stored = json.loads(lock_path.read_text(encoding="utf-8"))
+    stored = json.loads(lock_path.read_text(encoding="utf-8")) if lock_path.exists() else None
+    if stored is None:
+        stored = _lock_at(lock_path, "HEAD")
+        if stored is not None:
+            print("SCHEMA: the lock is absent from the tree but git still has it — deleting the "
+                  "file is not a way past the version decision")
+    if stored is not None:
         breaking, _ = classify(stored["shape"], fresh)
         new_version = version or stored["version"]
         if breaking and new_version == stored["version"]:

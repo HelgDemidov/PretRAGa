@@ -89,12 +89,12 @@ omit = ["*/conftest.py", "*/test_*.py"]
 
 [tool.coverage.report]
 # A floor that catches regressions, not a goal. Measured with exactly the gate
-# command on the replacement commit (70%), set two points lower for CI jitter.
-# The number undercounts by design: the negative tests exercise the tools
-# through subprocesses, which in-process coverage does not trace. The direct
-# evidence that the tests can fail is the mutation harness (pytest -m heavy),
-# not this percentage. Raise only on organic growth.
-fail_under = 68
+# command (75%), set two points lower for CI jitter. The number undercounts by
+# design: the negative tests exercise the tools through subprocesses, which
+# in-process coverage does not trace. The direct evidence that the tests can
+# fail is the mutation harness (pytest -m heavy), not this percentage. Raise
+# only on organic growth.
+fail_under = 73
 show_missing = true
 
 [tool.importlinter]

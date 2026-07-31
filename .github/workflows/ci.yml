@@ -26,7 +26,12 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
+      # Full history, not a shallow clone: the schema-version rule compares the
+      # lock against the point this branch left the trunk. Without the trunk in
+      # the clone that comparison silently has nothing to compare.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # Pinned to an exact version: setup-uv no longer publishes moving major
       # tags, and dependabot bumps this line.
