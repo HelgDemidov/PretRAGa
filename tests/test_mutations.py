@@ -152,6 +152,18 @@ MUTATIONS = [
     Mutation("anchor bounds unchecked", AUDIT,
              "        if not (0 <= anchor.span.start <= anchor.span.end <= len(text.body)):",
              "        if False:"),
+    Mutation("a substituted canonical text accepted", AUDIT,
+             "        if text.content_hash != anchor.text_hash:", "        if False:"),
+    Mutation("a substituted raw payload accepted", AUDIT,
+             "        if raw.content_hash != text.conversion.source:", "        if False:"),
+    Mutation("the examined count taken from a second call", AUDIT,
+             "    sampled = list(store.claims(sample))\n"
+             "    return len(sampled), audit(_SampledOnce(store, sampled), sample)",
+             "    return len(store.claims(sample)), audit(store, sample)"),
+    Mutation("messages carry a truncated key again", AUDIT,
+             '    return (f"claim #{index} @{c.anchor.text_hash}:{c.anchor.span.start}-'
+             '{c.anchor.span.end} "\n            f"{c.normalized[:40]!r}")',
+             '    return f"claim {c.normalized[:40]!r}"'),
     # --- failure-mode machinery -------------------------------------------
     Mutation("raises-mode accepts any exception", CONF,
              "        except SearchUnavailable:", "        except Exception:"),

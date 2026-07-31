@@ -1,13 +1,14 @@
 # The remote half of the gate. It runs the SAME six checks as the local gate
 # command in CLAUDE.md §10, with the same marker filter — on divergence, that
-# command is reconciled against this file, not the other way round.
+# command is reconciled against this file, not the other way round — plus the
+# mutation harness, which is CI-only and pull-request-only: it is the evidence
+# that those six can fail, and it is too slow for the everyday local command.
 #
-# One job, not six. The checks themselves take under half a minute together;
-# installing the locked dependencies dominates everything else, so splitting
-# would pay for that install repeatedly and save no wall clock. What splitting
-# is actually for — telling which check failed — is already provided by
-# per-step status, and `if: '!cancelled()'` keeps a single failure from hiding
-# the rest. Split this the day a real matrix appears, not before.
+# One job, not several. Installing the locked dependencies is cached, so
+# splitting would pay for that install repeatedly and save no wall clock. What
+# splitting is actually for — telling which check failed — is already provided
+# by per-step status, and `if: '!cancelled()'` keeps a single failure from
+# hiding the rest. Split this the day a real matrix appears, not before.
 name: CI
 
 on:
@@ -76,3 +77,21 @@ jobs:
       - name: Schema lock
         if: '!cancelled()'
         run: uv run python tools/schema_lock.py
+
+      # The only direct evidence that any of the checks above can FAIL: it
+      # plants a defect in each one in turn and demands a red suite. Without it
+      # the other six steps are green with nothing establishing that green
+      # means anything, and it lived on discipline rather than on the pipeline.
+      #
+      # Pull requests only. It costs several times the six steps together —
+      # measure before moving it, and put it back on every push the day it
+      # drops under two minutes. Core count does not help: measured no slower
+      # on two cores than on four, so the work is serial.
+      #
+      # A RED CONTROL INVALIDATES THE WHOLE RUN, not just its own line. The
+      # inner suite stops at the first failure, so if the untouched ring is
+      # already broken every mutation is reported killed by that break rather
+      # than by the mutation — 47 green lines meaning nothing. Measured.
+      - name: Mutation harness
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: uv run pytest -m heavy -q
