@@ -206,6 +206,14 @@ def test_the_hook_ignores_ungoverned_paths(ring: Path) -> None:
     assert out.strip() == ""
 
 
+def test_the_glossary_carries_the_terminological_conventions() -> None:
+    """The old map's conventions block found its v5 home: the domain package
+    docstring, rendered into the glossary preamble. Emptying either goes red."""
+    text = truth.render_glossary(truth.survey())
+    assert "reserved for live speech" in text
+    assert "state predicate" in text
+
+
 def test_the_glossary_render_is_deterministic() -> None:
     assert truth.render_glossary(truth.survey()) == truth.render_glossary(truth.survey())
 

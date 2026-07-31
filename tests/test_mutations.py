@@ -54,6 +54,9 @@ MUTATIONS = [
              '        if not (fn.__doc__ or "").strip():', "        if False:"),
     Mutation("port failure mode not required", TRUTH,
              "        if port not in declared:", "        if False:"),
+    Mutation("conventions dropped from the glossary", TRUTH,
+             '    out.extend(["## Conventions", "", inspect.cleandoc(pkg.__doc__ or ""), ""])',
+             "    pass"),
     Mutation("stale glossary passes", TRUTH,
              '        elif glossary.read_text(encoding="utf-8") != want:', "        elif False:"),
     Mutation("dynamic-import escapes ignored", TRUTH,
@@ -137,7 +140,12 @@ def test_mutation_anchor_matches_exactly_once(mutation: Mutation) -> None:
 
 
 def test_every_tool_and_guarded_module_is_mutated() -> None:
-    assert {m.filename for m in MUTATIONS} == {TRUTH, LOCK, KINDS, AUDIT, ANSWER, CONF}
+    """A NEW tool cannot ship without planted mutations: the demanded set is
+    derived from the filesystem, not from this file's memory of it."""
+    tools = {f"tools/{p.name}" for p in (ROOT / "tools").glob("*.py")}
+    mutated = {m.filename for m in MUTATIONS}
+    assert tools <= mutated, f"tool module(s) without a mutation: {sorted(tools - mutated)}"
+    assert mutated == tools | {KINDS, AUDIT, ANSWER, CONF}
 
 
 def test_every_suite_spawning_test_is_marked_heavy() -> None:

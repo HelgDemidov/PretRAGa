@@ -216,6 +216,8 @@ def render_glossary(s: Survey) -> str:
     out = ["# PretRAGa domain glossary", "",
            "GENERATED from the domain package — never edit by hand. A concept's definition",
            "is the docstring of its class, so there is no second copy that could drift.", ""]
+    pkg = importlib.import_module(PACKAGE)
+    out.extend(["## Conventions", "", inspect.cleandoc(pkg.__doc__ or ""), ""])
 
     def block(title: str, items: Mapping[str, object], note: str) -> None:
         out.extend([f"## {title}", "", note, ""])
