@@ -13,7 +13,7 @@ def test_a_well_formed_value_is_accepted() -> None:
 
         h: ContentHash
 
-    assert Good.model_config["frozen"] is True
+    assert Good.model_config.get("frozen") is True
 
 
 def test_a_well_formed_entity_is_accepted() -> None:

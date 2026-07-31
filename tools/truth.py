@@ -79,8 +79,10 @@ class Survey:
     module_of: dict[str, str] = field(default_factory=dict)
 
 
-def _is_port(obj: object) -> bool:
-    return isinstance(obj, type) and getattr(obj, "_is_protocol", False)
+def _is_port(obj: object) -> typing.TypeGuard[type]:
+    """A narrowing predicate, not a bare bool: the survey's elif chain relies
+    on it to tell the type checker that a port IS a class."""
+    return isinstance(obj, type) and bool(getattr(obj, "_is_protocol", False))
 
 
 def _module_names(package: str) -> list[str]:
