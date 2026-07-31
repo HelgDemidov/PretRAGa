@@ -51,7 +51,7 @@ def source_text() -> str:
 @pytest.fixture
 def data(source_text: str) -> dict[str, Any]:
     """A fresh mutable copy per test: mutations must not leak between tests."""
-    loaded: dict[str, Any] = yaml.safe_load(source_text)
+    loaded: dict[str, Any] = build.load_yaml(source_text)
     return loaded
 
 
@@ -132,10 +132,26 @@ def test_unknown_trigger_is_rejected(data: dict[str, Any]) -> None:
     pytest.fail("no placeholder with a trigger in the map to mutate")
 
 
-@pytest.mark.parametrize("block", ["kinds", "relation_classes", "relation_types", "triggers"])
+@pytest.mark.parametrize("block", sorted(build.VOCABULARIES))
 def test_missing_vocabulary_block_is_rejected(data: dict[str, Any], block: str) -> None:
     del data[block]
     assert any(f"missing top-level {block} block" in e for e in build.validate(data))
+
+
+def test_no_vocabulary_lives_in_the_code(data: dict[str, Any]) -> None:
+    """Every name the model operates with is data. The generator may hold the
+    SHAPE of a vocabulary (which obligation fields exist) but never its
+    MEMBERS — otherwise adding a status would mean editing Python while adding
+    a kind means editing the map, and the map stops being the only channel."""
+    for block in build.VOCABULARIES:
+        assert data.get(block), f"{block} must be declared in the map"
+    source = (HERE / "entity_map_build.py").read_text(encoding="utf-8")
+    # Marks are exempt on purpose: a mark's name IS the name of the kind
+    # obligation that looks for it (`identity`, `version`), so the two are one
+    # concept spelled once. Statuses and layers have no such tie and must not
+    # appear as literals at all.
+    for name in list(data["statuses"]) + list(data["layers"]):
+        assert f'"{name}"' not in source, f"vocabulary member {name!r} is hardcoded in the generator"
 
 
 def test_missing_conventions_is_rejected(data: dict[str, Any]) -> None:
@@ -216,7 +232,8 @@ def test_attribute_forbidding_kind_rejects_attributes(data: dict[str, Any]) -> N
         fresh = copy.deepcopy(data)
         entity = _first_of_kind(fresh, kind)
         assert entity is not None
-        entity["attributes"] = [{"name": "smuggled", "status": "fixed"}]
+        settled = next(s for s, spec in fresh["statuses"].items() if spec["settled"])
+        entity["attributes"] = [{"name": "smuggled", "status": settled}]
         assert any("takes no attributes" in e for e in build.validate(fresh))
 
 
@@ -232,6 +249,203 @@ def test_anchor_requirement_follows_the_kind(data: dict[str, Any]) -> None:
     for e in data["entities"]:
         expected = data["kinds"][e["kind"]]["anchor"] == "required"
         assert build.anchor_required(data, e) is expected
+
+
+# --------------------------------------------------------------------------
+# the loader: fast, and loud where PyYAML is silent
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("doc", "where"),
+    [
+        ("a: 1\na: 2\n", "top level"),
+        ("entities:\n  - id: A\n    definition: x\n    definition: y\n", "inside an entity"),
+        ("entities:\n  - {name: n, status: fixed, status: deferred}\n", "inside an attribute"),
+        ("kinds:\n  data:\n    ru: a\n    ru: b\n", "inside a nested mapping"),
+    ],
+)
+def test_duplicate_key_raises_instead_of_losing_a_field(doc: str, where: str) -> None:
+    """Stock PyYAML resolves a duplicate key in favour of the last one without
+    a word. In a hand-written source of truth that is silent data loss: a
+    definition can be deleted by a careless paste, the file stays valid YAML,
+    and no check downstream can tell it ever existed."""
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
+        build.load_yaml(doc)
+    assert yaml.safe_load(doc), f"stock PyYAML still accepts it silently ({where})"
+
+
+def test_strict_loader_parses_the_real_map_unchanged(source_text: str) -> None:
+    assert build.load_yaml(source_text) == yaml.safe_load(source_text)
+
+
+# --------------------------------------------------------------------------
+# --removal-impact: planning narrowing without performing it
+# --------------------------------------------------------------------------
+
+def test_removal_plan_names_every_relation_that_would_dangle(data: dict[str, Any]) -> None:
+    target = "Translation"
+    expected = [r for r in data["relations"] if target in (r["from"], r["to"])]
+    assert expected, "target has no relations — the test would be vacuous"
+    lines = check.removal_impact(data, [target])
+    assert f"relations to delete: {len(expected)}" in "\n".join(lines)
+    for r in expected:
+        assert any(f"from: {r['from']}, to: {r['to']}" in line for line in lines)
+
+
+def test_removal_plan_predicts_a_vocabulary_value_left_without_carriers(
+    data: dict[str, Any],
+) -> None:
+    """Deleting the last entity of a kind kills the kind too, and a dead
+    vocabulary value fails the build just as hard as a dangling relation."""
+    counts: dict[str, int] = {}
+    for e in data["entities"]:
+        counts[e["kind"]] = counts.get(e["kind"], 0) + 1
+    lone_kind, = [k for k, n in counts.items() if n == 1][:1]
+    victim = next(e["id"] for e in data["entities"] if e["kind"] == lone_kind)
+    lines = check.removal_impact(data, [victim])
+    assert any("kinds left with no carrier" in line and lone_kind in line for line in lines)
+
+
+def test_removal_plan_predicts_isolation(data: dict[str, Any]) -> None:
+    degree: dict[str, int] = {e["id"]: 0 for e in data["entities"]}
+    for r in data["relations"]:
+        degree[r["from"]] += 1
+        degree[r["to"]] += 1
+    hub = max(degree, key=lambda k: degree[k])
+    lines = check.removal_impact(data, [hub])
+    text = "\n".join(lines)
+    if "would become isolated" in text:
+        named = text.split("would become isolated (an error): ")[1].split("\n")[0].split(", ")
+        survivors = {e["id"] for e in data["entities"]} - {hub}
+        kept = [r for r in data["relations"] if hub not in (r["from"], r["to"])]
+        linked = {r["from"] for r in kept} | {r["to"] for r in kept}
+        assert set(named) == survivors - linked
+
+
+def test_removal_plan_matches_what_actually_happens(data: dict[str, Any]) -> None:
+    """The plan and the run are computed from the same functions, so the plan
+    cannot promise something the deletion does not deliver. Verified by doing
+    the deletion the plan describes and re-reading the map."""
+    target = "Translation"
+    lines = check.removal_impact(data, [target])
+    predicted = int("".join(lines).split("open obligations: ")[1].split(" -> ")[1].split(" ")[0])
+
+    data["entities"] = [e for e in data["entities"] if e["id"] != target]
+    data["relations"] = [r for r in data["relations"] if target not in (r["from"], r["to"])]
+    assert build.validate(data) == [], "the plan missed something that breaks the map"
+    assert len(build.obligations(data)) == predicted
+
+
+def test_removal_plan_writes_nothing(data: dict[str, Any], source_text: str) -> None:
+    before = {e["id"] for e in data["entities"]}, len(data["relations"])
+    check.removal_impact(data, ["Translation", "Corpus"])
+    assert ({e["id"] for e in data["entities"]}, len(data["relations"])) == before
+    assert build.SOURCE.read_text(encoding="utf-8") == source_text
+
+
+def test_removal_plan_rejects_an_unknown_entity(data: dict[str, Any]) -> None:
+    lines = check.removal_impact(data, ["Nonesuch"])
+    assert lines == ["removal: no such entity: Nonesuch"]
+
+
+def test_removal_impact_cli_exits_nonzero_on_an_unknown_entity(truth_copy: Path) -> None:
+    ok = _run(truth_copy / "entity_map_check.py", "--removal-impact", "Corpus")
+    assert ok.returncode == 0 and "removal plan for: Corpus" in ok.stdout
+    bad = _run(truth_copy / "entity_map_check.py", "--removal-impact", "Nonesuch")
+    assert bad.returncode == 1
+    usage = _run(truth_copy / "entity_map_check.py", "--removal-impact")
+    assert usage.returncode == 1 and "usage:" in usage.stdout
+
+
+# --------------------------------------------------------------------------
+# the two registries and the flat index
+# --------------------------------------------------------------------------
+
+def _unsettled_attributes(data: dict[str, Any]) -> list[tuple[str, str]]:
+    return [
+        (e["id"], a["name"])
+        for e in data["entities"]
+        for a in build._attrs(e)
+        if not data["statuses"][a["status"]]["settled"]
+    ]
+
+
+def test_unsettled_registry_covers_every_unsettled_status(data: dict[str, Any]) -> None:
+    """The promise is that nothing agreed-but-unspecified is lost. Before the
+    statuses became data the registry listed placeholders only, so the
+    attributes awaiting a measurement or a later stage fell out of it."""
+    rows = build.unsettled_registry(data).splitlines()[2:]
+    assert len(rows) == len(_unsettled_attributes(data))
+    unsettled_statuses = {s for s, spec in data["statuses"].items() if not spec["settled"]}
+    assert len(unsettled_statuses) > 1, "registry would be indistinguishable from a placeholder list"
+    for status in unsettled_statuses:
+        label = build._status_label(data, status)
+        assert any(label in row for row in rows), f"{status} never reaches the registry"
+
+
+def test_settling_a_status_empties_its_share_of_the_registry(data: dict[str, Any]) -> None:
+    victim = next(s for s, spec in data["statuses"].items() if not spec["settled"])
+    before = len(build.unsettled_registry(data).splitlines())
+    affected = sum(
+        1 for e in data["entities"] for a in build._attrs(e) if a["status"] == victim
+    )
+    data["statuses"][victim]["settled"] = True
+    after = len(build.unsettled_registry(data).splitlines())
+    assert before - after == affected
+
+
+def test_entity_index_lists_every_entity_exactly_once(data: dict[str, Any]) -> None:
+    rows = build.entity_index(data).splitlines()[2:]
+    assert len(rows) == len(data["entities"])
+    listed = [r.split("`")[1] for r in rows]
+    assert set(listed) == {e["id"] for e in data["entities"]}
+
+
+def test_every_entity_listing_is_sorted_by_the_russian_name(data: dict[str, Any]) -> None:
+    """One collation for all of them: the index, both registries, the kind
+    membership lists and the layer composition must read in the same order, or
+    cross-referencing them by eye stops working."""
+    expected = [e["ru"] for e in build.entities_ru_sorted(data)]
+    keys = [build.ru_key(name) for name in expected]
+    assert keys == sorted(keys), "entities_ru_sorted is not actually sorted"
+
+    index_names = [r.split("|")[1].strip() for r in build.entity_index(data).splitlines()[2:]]
+    assert index_names == expected
+
+    seen: list[str] = []
+    for row in build.unsettled_registry(data).splitlines()[2:]:
+        name = row.split("|")[1].strip().rsplit(" (", 1)[0]
+        if name not in seen:
+            seen.append(name)
+    assert seen == [n for n in expected if n in seen]
+
+
+def test_yo_collates_with_ye_not_at_the_alphabet_edges(data: dict[str, Any]) -> None:
+    """Codepoints put `ё` in two wrong places at once: lowercase ё (U+0451)
+    lands past я, uppercase Ё (U+0401) lands before А. The key fixes both by
+    folding case first and then ё to е."""
+    assert build.ru_key("Ёмкость") > build.ru_key("Егерь")
+    assert build.ru_key("Ёмкость") < build.ru_key("Жажда")
+    # what plain comparison does instead, in both directions
+    assert "ёмкость" > "яблоко"
+    assert "Ёмкость" < "Абажур"
+
+
+def test_every_declared_status_and_mark_is_used(data: dict[str, Any]) -> None:
+    used_status = {a["status"] for e in data["entities"] for a in build._attrs(e)}
+    used_marks = {a["marks"] for e in data["entities"] for a in build._attrs(e) if a.get("marks")}
+    assert used_status == set(data["statuses"])
+    assert used_marks == set(data["marks"])
+
+
+@pytest.mark.parametrize("field", sorted(build.OBLIGATION_FIELDS))
+def test_every_obligation_can_be_loosened_as_data(data: dict[str, Any], field: str) -> None:
+    """Thinning the schema must never require a code edit: `optional` has to be
+    a legal value everywhere, or that field can only be tightened."""
+    assert "optional" in build.OBLIGATION_FIELDS[field]
+    for kind in data["kinds"].values():
+        kind[field] = "optional"
+    assert not [e for e in build.validate(data) if "obligation" in e]
 
 
 # --------------------------------------------------------------------------
@@ -320,14 +534,29 @@ def test_isolated_entity_is_rejected(data: dict[str, Any]) -> None:
     assert any("isolated entity (no relations): Orphan" in e for e in build.validate(data))
 
 
-def test_placeholder_without_trigger_is_rejected(data: dict[str, Any]) -> None:
+def test_status_requiring_a_trigger_rejects_its_absence(data: dict[str, Any]) -> None:
+    needs = [s for s, spec in data["statuses"].items() if spec.get("requires_trigger")]
+    assert needs, "no status requires a trigger — the test would be vacuous"
     for e in data["entities"]:
         for a in build._attrs(e):
-            if a["status"] == "placeholder":
+            if a["status"] in needs:
                 del a["trigger"]
-                assert any("placeholder without trigger" in err for err in build.validate(data))
+                assert any("requires a trigger" in err for err in build.validate(data))
                 return
-    pytest.fail("no placeholder in the map to mutate")
+    pytest.fail("no attribute carries a trigger-requiring status")
+
+
+def test_the_trigger_rule_follows_the_flag_not_the_status_name(data: dict[str, Any]) -> None:
+    """Turning the flag on for a status that does not carry triggers must start
+    failing those attributes. If the check were still keyed to the literal name
+    `placeholder`, flipping the flag would change nothing."""
+    victim = next(
+        s for s, spec in data["statuses"].items()
+        if not spec.get("requires_trigger") and not spec["settled"]
+    )
+    data["statuses"][victim]["requires_trigger"] = True
+    errors = build.validate(data)
+    assert any(f"status {victim} requires a trigger" in e for e in errors), errors
 
 
 def test_entity_without_definition_is_rejected(data: dict[str, Any]) -> None:
@@ -358,10 +587,11 @@ def test_closing_an_obligation_removes_exactly_that_row(data: dict[str, Any]) ->
     assert gaps, "no identity gap in the map — the test would be vacuous"
     eid = gaps[0][0]
     entity = next(e for e in data["entities"] if e["id"] == eid)
-    entity["attributes"].append({"name": "uuid", "status": "fixed", "marks": "identity"})
+    settled = next(s for s, spec in data["statuses"].items() if spec["settled"])
+    entity["attributes"].append({"name": "uuid", "status": settled, "marks": "identity"})
     after = build.obligations(data)
     assert (eid, entity["kind"], build.OBLIGATION_LABEL["identity"]) not in after
-    assert len(after) == len(build.obligations(yaml.safe_load(build.SOURCE.read_text("utf-8")))) - 1
+    assert len(after) == len(build.obligations(build.load_yaml(build.SOURCE.read_text("utf-8")))) - 1
 
 
 @given(dropped=st.sets(st.integers(min_value=0, max_value=200)))
@@ -371,7 +601,7 @@ def test_obligations_stay_justified_on_any_subgraph(source_text: str, dropped: s
     drop an arbitrary subset of its relations and the registry must still only
     report gaps its kinds actually require. Dropping edges can only ADD gaps —
     it must never invent one for a kind that does not ask for it."""
-    data = yaml.safe_load(source_text)
+    data = build.load_yaml(source_text)
     data["relations"] = [r for i, r in enumerate(data["relations"]) if i not in dropped]
     _obligations_are_justified(data)
 
@@ -379,7 +609,7 @@ def test_obligations_stay_justified_on_any_subgraph(source_text: str, dropped: s
 @given(dropped=st.sets(st.integers(min_value=0, max_value=200), min_size=1))
 @PROPERTY
 def test_dropping_relations_never_reduces_the_registry(source_text: str, dropped: set[int]) -> None:
-    data = yaml.safe_load(source_text)
+    data = build.load_yaml(source_text)
     baseline = len(build.obligations(data))
     data["relations"] = [r for i, r in enumerate(data["relations"]) if i not in dropped]
     assert len(build.obligations(data)) >= baseline
@@ -435,7 +665,7 @@ def test_kinds_forbidding_anchors_are_not_pending(truth_copy: Path) -> None:
     done = _run(truth_copy / "entity_map_check.py")
     line = next(ln for ln in done.stdout.splitlines() if "without code anchors" in ln)
     listed = {token.strip() for token in line.split(":")[-1].split(",")}
-    data = yaml.safe_load((truth_copy / "entity_map.yaml").read_text(encoding="utf-8"))
+    data = build.load_yaml((truth_copy / "entity_map.yaml").read_text(encoding="utf-8"))
     excused = {e["id"] for e in data["entities"] if not build.anchor_required(data, e)}
     assert excused, "no kind excuses anchors — the test would be vacuous"
     assert not (listed & excused)
@@ -453,6 +683,62 @@ def test_hook_emits_json_even_when_the_map_is_unreadable(truth_copy: Path) -> No
     assert done.returncode == 0
     assert '"decision": "block"' in done.stdout
     assert "MAP UNREADABLE" in done.stdout
+
+
+def _hook(truth_copy: Path, edited: Path) -> subprocess.CompletedProcess[str]:
+    payload = f'{{"tool_input": {{"file_path": "{edited}"}}}}'
+    return subprocess.run(
+        [sys.executable, str(truth_copy / "entity_map_check.py"), "--hook"],
+        input=payload, capture_output=True, text=True, check=False,
+    )
+
+
+def test_editing_a_tool_does_not_block_on_stale_views(truth_copy: Path) -> None:
+    """Editing the renderer redefines what a fresh view is, so the views go
+    stale at that instant and cannot be rebuilt until the edit is finished.
+    Blocking there demands the impossible, and a block that cannot be obeyed
+    trains the operator to ignore blocks."""
+    tool = truth_copy / "entity_map_build.py"
+    tool.write_text(tool.read_text(encoding="utf-8") + "\n# touched\n", encoding="utf-8")
+    (truth_copy / "entity_map.md").write_text("stale", encoding="utf-8")
+    done = _hook(truth_copy, tool)
+    assert '"decision": "block"' not in done.stdout
+    assert "expected while a tool is being edited" in done.stdout
+
+
+def test_editing_the_map_still_blocks_on_stale_views(truth_copy: Path) -> None:
+    """The demotion is narrow on purpose: staleness caused by a data edit is
+    exactly the forgotten regeneration the check exists to catch."""
+    (truth_copy / "entity_map.md").write_text("stale", encoding="utf-8")
+    done = _hook(truth_copy, truth_copy / "entity_map.yaml")
+    assert '"decision": "block"' in done.stdout
+
+
+def test_hand_editing_a_generated_view_still_blocks(truth_copy: Path) -> None:
+    """The other half of what freshness protects. A generated file has one
+    writer; editing it by hand must never be waved through."""
+    view = truth_copy / "entity_map.md"
+    view.write_text(view.read_text(encoding="utf-8") + "\nsmuggled\n", encoding="utf-8")
+    done = _hook(truth_copy, view)
+    assert '"decision": "block"' in done.stdout
+
+
+def test_demotion_covers_tools_only(truth_copy: Path) -> None:
+    import entity_map_check as chk
+    here = str(chk.HERE.relative_to(chk.ROOT))
+    assert chk.edit_invalidated_the_views(f"{here}/entity_map_build.py")
+    assert chk.edit_invalidated_the_views(f"{here}/entity_map_check.py")
+    assert not chk.edit_invalidated_the_views(f"{here}/entity_map.yaml")
+    assert not chk.edit_invalidated_the_views(f"{here}/entity_map.md")
+    assert not chk.edit_invalidated_the_views("src/anything.py")
+
+
+def test_a_real_error_still_blocks_even_when_a_tool_was_edited(truth_copy: Path) -> None:
+    """Demoting staleness must not demote anything else: a broken map is still
+    a hard stop no matter which file the edit touched."""
+    (truth_copy / "entity_map.yaml").write_text("{[ not yaml", encoding="utf-8")
+    done = _hook(truth_copy, truth_copy / "entity_map_build.py")
+    assert '"decision": "block"' in done.stdout
 
 
 def test_impact_flags_a_truth_artifact_edit(data: dict[str, Any]) -> None:

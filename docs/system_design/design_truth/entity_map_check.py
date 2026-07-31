@@ -35,7 +35,6 @@ import sys
 from pathlib import Path
 
 import entity_map_build
-import yaml
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[2]
@@ -44,7 +43,7 @@ MAP_FILE = HERE / "entity_map.yaml"
 
 
 def load_map() -> dict:
-    return yaml.safe_load(MAP_FILE.read_text(encoding="utf-8"))
+    return entity_map_build.load_yaml(MAP_FILE.read_text(encoding="utf-8"))
 
 
 def check_map_integrity(data: dict) -> list[str]:
@@ -136,6 +135,62 @@ def impact(data: dict, changed: list[str]) -> list[str]:
     return lines
 
 
+def removal_impact(data: dict, targets: list[str]) -> list[str]:
+    """Dry run for narrowing the map: everything that must go if these entities
+    do. Writes nothing, takes no lock, touches no file — planning is separate
+    from execution, and the map stays hand-edited because the machine does not
+    rewrite the truth. What it reports is what the checker WOULD report after
+    the deletion, computed from the same data, so the plan cannot disagree with
+    the run."""
+    known = {e["id"]: e for e in data["entities"]}
+    unknown = [t for t in targets if t not in known]
+    if unknown:
+        return [f"removal: no such entity: {', '.join(unknown)}"]
+    doomed = set(targets)
+
+    lines = [f"removal plan for: {', '.join(sorted(doomed))}"]
+    for eid in sorted(doomed):
+        lines.append(f"  {eid}: delete its block ({len(known[eid].get('attributes') or [])} attribute(s))")
+
+    cut = [r for r in data["relations"] if r["from"] in doomed or r["to"] in doomed]
+    lines.append(f"  relations to delete: {len(cut)}")
+    for r in cut:
+        lines.append(f"    - {{from: {r['from']}, to: {r['to']}, type: {r['type']}}}")
+
+    survivors = {e["id"] for e in data["entities"]} - doomed
+    kept = [r for r in data["relations"] if r not in cut]
+    still_linked = {r["from"] for r in kept} | {r["to"] for r in kept}
+    isolated = sorted(survivors - still_linked)
+    if isolated:
+        lines.append(f"  would become isolated (an error): {', '.join(isolated)}")
+
+    # A vocabulary value with no carrier left is as fatal as a carrier with no
+    # value: both fail the build, so the plan has to name them too.
+    rest = [known[i] for i in survivors]
+    for block, used in (
+        ("kinds", {e["kind"] for e in rest}),
+        ("layers", {e["layer"] for e in rest}),
+        ("groups", {e["group"] for e in rest}),
+        ("statuses", {a["status"] for e in rest for a in entity_map_build._attrs(e)}),
+        ("marks", {a["marks"] for e in rest for a in entity_map_build._attrs(e) if a.get("marks")}),
+        ("triggers", {a["trigger"] for e in rest for a in entity_map_build._attrs(e) if a.get("trigger")}),
+        ("relation_types", {r["type"] for r in kept}),
+    ):
+        dead = sorted(set(data[block]) - used)
+        if dead:
+            lines.append(f"  {block} left with no carrier (must also go): {', '.join(dead)}")
+
+    after = dict(data, entities=rest, relations=kept)
+    before_n = len(entity_map_build.obligations(data))
+    try:
+        after_n = len(entity_map_build.obligations(after))
+        lines.append(f"  open obligations: {before_n} -> {after_n}")
+    except KeyError:  # pragma: no cover — only when a vocabulary is already dead
+        lines.append(f"  open obligations: {before_n} -> not computable until the dead values above are removed")
+    lines.append("  nothing was written: this is a plan, the edit stays yours")
+    return lines
+
+
 def check_obligations(data: dict) -> list[str]:
     """Unmet `required` kind obligations, grouped by what is missing. Never an
     error: closing one means deciding what an entity is identified by, what
@@ -151,15 +206,37 @@ def check_obligations(data: dict) -> list[str]:
     return lines
 
 
-def run_checks(data: dict, quick: bool) -> int:
+def edit_invalidated_the_views(rel: str) -> bool:
+    """True when the edited file is a tool of this system rather than its data.
+
+    Editing the renderer redefines what "a fresh view" means, so the committed
+    views go stale at that instant and STAY stale until the build is re-run —
+    which cannot happen until the refactor is finished. Blocking there asks for
+    something impossible mid-edit, and a block that cannot be obeyed teaches
+    the operator to ignore blocks. The bill for demoting it: a forgotten
+    regeneration after a tool edit is no longer caught at edit time. It is
+    still caught three ways — the standalone checker, the local gate, and
+    `test_committed_view_is_fresh`. What is NOT demoted: a hand edit of a
+    generated view, and staleness caused by editing the map itself."""
+    here = str(HERE.relative_to(ROOT))
+    return rel.startswith(here + "/") and rel.endswith(".py")
+
+
+def run_checks(data: dict, quick: bool, demote_views: bool = False) -> int:
     errors: list[str] = []
+    stale_views: list[str] = []
     errors += check_map_integrity(data)
     if not errors:
         # Rendering assumes the invariants integrity just verified (resolvable
         # relation endpoints, triggers, definitions, conventions) — checking
         # view freshness against an invalid map would crash, not diagnose.
-        errors += check_generated_views(data)
+        view_errors = check_generated_views(data)
+        if demote_views:
+            stale_views = view_errors
+        else:
+            errors += view_errors
     anchor_errors, info = check_anchors(data)
+    info = stale_views + info
     errors += anchor_errors
     errors += check_orphans(data)
     if not errors:
@@ -172,6 +249,11 @@ def run_checks(data: dict, quick: bool) -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
+    for line in info if quick else []:
+        # In quick mode only the demoted staleness is worth surfacing; the rest
+        # of the informational traffic would drown the hook report.
+        if line.startswith("views:"):
+            print(f"  i {line} — expected while a tool is being edited; rebuild before committing")
     if not quick:
         for line in info:
             print(f"  i {line}")
@@ -216,7 +298,9 @@ def hook_mode() -> int:
         buf = io.StringIO()
         try:
             with redirect_stdout(buf):
-                failed = run_checks(data, quick=True) != 0
+                failed = run_checks(
+                    data, quick=True, demote_views=edit_invalidated_the_views(rel)
+                ) != 0
             lines.extend(buf.getvalue().strip().splitlines())
             lines.extend(f"[entity-map] {line}" for line in impact(data, [rel]))
         except Exception as exc:  # noqa: BLE001 — the hook must ALWAYS emit JSON
@@ -247,6 +331,14 @@ def main(argv: list[str]) -> int:
         for line in impact(data, argv[1:]):
             print(line)
         return 0
+    if argv and argv[0] == "--removal-impact":
+        if len(argv) < 2:
+            print("usage: --removal-impact <Entity> [Entity ...]")
+            return 1
+        lines = removal_impact(data, argv[1:])
+        for line in lines:
+            print(line)
+        return 1 if lines[0].startswith("removal: no such entity") else 0
     return run_checks(data, quick=bool(argv) and argv[0] == "--quick")
 
 

@@ -9,10 +9,59 @@
 
 Сущностей: 39 в 7 породах; связей: 85 в 14 типах; атрибутов: 114 (✅ зафиксировано: 83; ⬜ плейсхолдер: 22; 🔧 выбор реализации: 5; ⏩ отложено: 4); открытых обязательств: 20.
 
+## Указатель сущностей
+
+Единственный плоский перечень: всё, что есть, по алфавиту имени в коде.
+Остальные перечни в этом файле сгруппированы — по породам, слоям, группам.
+
+| Сущность | Имя в коде | Порода | Слой | Группа | Атрибутов | Связей |
+|---|---|---|---|---|---|---|
+| Акт добычи | `AcquisitionAct` | данные | Добыча | Добыча | 3 | 5 |
+| Валидатор деливерабла | `DeliverableValidator` | процесс | Мастерская синтеза | Запросы и синтез | 2 | 2 |
+| Векторный индекс | `VectorIndex` | производное | Обогащение | Реестр и хранение | 2 | 6 |
+| Версия содержимого | `ContentVersion` | данные | Конвертация | Документ и содержимое | 2 | 6 |
+| Граф | `GraphLayer` | производное | Обогащение | Факты и граф | 5 | 9 |
+| Дедупликация | `Deduplication` | процесс | Триаж и дедупликация | Процессы | 3 | 2 |
+| Деливерабл | `Deliverable` | данные | Мастерская синтеза | Запросы и синтез | 3 | 4 |
+| Документ | `Document` | данные | Реестр корпуса | Документ и содержимое | 10 | 11 |
+| Замок писателя | `WriterLock` | процесс | Сквозное основание | Сквозное | 2 | 1 |
+| Запись конвертации | `ConversionRecord` | данные | Конвертация | Документ и содержимое | 2 | 3 |
+| Запрос тренда | `TrendQuery` | процесс | Слой запросов | Запросы и синтез | 3 | 1 |
+| Канал добычи | `AcquisitionChannel` | данные | Добыча | Добыча | 9 | 4 |
+| Канонический текст | `CanonicalText` | данные | Конвертация | Документ и содержимое | 2 | 6 |
+| Коннектор | `Connector` | запись расширения | Добыча | Добыча | 3 | 1 |
+| Контролируемый словарь | `ControlledVocabulary` | файл данных (человек) | Сквозное основание | Факты и граф | 2 | 4 |
+| Корпус | `Corpus` | термин | Реестр корпуса | Реестр и хранение | 0 | 1 |
+| Лексический индекс | `LexicalIndex` | производное | Обогащение | Реестр и хранение | 2 | 5 |
+| Манифест деривации | `DerivationManifest` | данные | Сквозное основание | Реестр и хранение | 2 | 6 |
+| Машинное хранилище | `MachineStore` | хранилище | Сквозное основание | Реестр и хранение | 2 | 5 |
+| Минимум приёмки | `AdmissionMinimum` | процесс | Реестр корпуса | Процессы | 2 | 1 |
+| Обогащение | `Enrichment` | процесс | Обогащение | Процессы | 3 | 12 |
+| Очередь исключений | `ExceptionQueue` | процесс | Триаж и дедупликация | Процессы | 2 | 2 |
+| Перевод | `Translation` | производное | Обогащение | Документ и содержимое | 2 | 2 |
+| Подсказка добычи | `AcquisitionHint` | производное | Добыча | Добыча | 1 | 2 |
+| Рабочее пространство | `Workspace` | хранилище | Сквозное основание | Реестр и хранение | 1 | 7 |
+| Реестр корпуса | `CorpusRegistry` | хранилище | Реестр корпуса | Реестр и хранение | 4 | 5 |
+| Реконсиляция | `Reconciliation` | процесс | Сквозное основание | Процессы | 3 | 3 |
+| Сетевой клиент | `NetworkClient` | процесс | Сквозное основание | Сквозное | 2 | 3 |
+| Склейка | `MergeOperation` | процесс | Триаж и дедупликация | Процессы | 2 | 2 |
+| Словесная обвязка | `VerbalizedGraphContext` | производное | Обогащение | Факты и граф | 2 | 3 |
+| Слой запросов | `QueryLayer` | процесс | Слой запросов | Запросы и синтез | 5 | 7 |
+| Сущность мира | `WorldEntity` | данные | Обогащение | Факты и граф | 1 | 2 |
+| Сырой payload | `RawPayload` | данные | Добыча | Добыча | 4 | 5 |
+| Таблица авторитетности | `AuthorityRuleTable` | файл данных (человек) | Сквозное основание | Факты и граф | 2 | 1 |
+| Типизированная ссылка | `TypedReference` | данные | Обогащение | Факты и граф | 3 | 6 |
+| Триаж | `Triage` | процесс | Триаж и дедупликация | Процессы | 4 | 5 |
+| Утверждение | `Claim` | данные | Обогащение | Факты и граф | 8 | 8 |
+| Фрагмент | `Fragment` | производное | Обогащение | Документ и содержимое | 2 | 4 |
+| Якорь провенанса | `ProvenanceAnchor` | данные | Конвертация | Документ и содержимое | 2 | 8 |
+
 ## Словари карты
 
-Закрытые словари: значение вне словаря — ошибка, новое значение — запись
-в `entity_map.yaml`, а не правка скриптов.
+Вся номенклатура, которой оперирует модель. Словари закрыты: значение вне
+словаря — ошибка, новое значение — запись в `entity_map.yaml`, а не правка
+скриптов. Код не ветвится по именам статусов — только по их свойствам
+(`settled`, `requires_trigger`), поэтому имена остаются данными.
 
 ### Породы сущностей и их обязательства
 
@@ -26,13 +75,15 @@
 | `extension` (запись расширения) | запись таблицы расширений; новая разновидность — запись, а не правка ядра | required | forbidden | required | forbidden | optional | required | 1 |
 | `term` (термин) | статья словаря без собственного носителя: ни кода, ни атрибутов | forbidden | forbidden | optional | forbidden | optional | forbidden | 1 |
 
-- `data` — AcquisitionChannel, AcquisitionAct, RawPayload, Document, ContentVersion, CanonicalText, ConversionRecord, ProvenanceAnchor, Claim, TypedReference, WorldEntity, DerivationManifest, Deliverable
-- `derived` — AcquisitionHint, Fragment, Translation, GraphLayer, VerbalizedGraphContext, VectorIndex, LexicalIndex
-- `process` — AdmissionMinimum, Triage, Deduplication, MergeOperation, Enrichment, ExceptionQueue, Reconciliation, QueryLayer, TrendQuery, DeliverableValidator, NetworkClient, WriterLock
-- `store` — CorpusRegistry, MachineStore, Workspace
-- `data_file` — ControlledVocabulary, AuthorityRuleTable
-- `extension` — Connector
-- `term` — Corpus
+Состав каждой породы (порядок — как в указателе):
+
+- `data` — Акт добычи (`AcquisitionAct`), Версия содержимого (`ContentVersion`), Деливерабл (`Deliverable`), Документ (`Document`), Запись конвертации (`ConversionRecord`), Канал добычи (`AcquisitionChannel`), Канонический текст (`CanonicalText`), Манифест деривации (`DerivationManifest`), Сущность мира (`WorldEntity`), Сырой payload (`RawPayload`), Типизированная ссылка (`TypedReference`), Утверждение (`Claim`), Якорь провенанса (`ProvenanceAnchor`)
+- `derived` — Векторный индекс (`VectorIndex`), Граф (`GraphLayer`), Лексический индекс (`LexicalIndex`), Перевод (`Translation`), Подсказка добычи (`AcquisitionHint`), Словесная обвязка (`VerbalizedGraphContext`), Фрагмент (`Fragment`)
+- `process` — Валидатор деливерабла (`DeliverableValidator`), Дедупликация (`Deduplication`), Замок писателя (`WriterLock`), Запрос тренда (`TrendQuery`), Минимум приёмки (`AdmissionMinimum`), Обогащение (`Enrichment`), Очередь исключений (`ExceptionQueue`), Реконсиляция (`Reconciliation`), Сетевой клиент (`NetworkClient`), Склейка (`MergeOperation`), Слой запросов (`QueryLayer`), Триаж (`Triage`)
+- `store` — Машинное хранилище (`MachineStore`), Рабочее пространство (`Workspace`), Реестр корпуса (`CorpusRegistry`)
+- `data_file` — Контролируемый словарь (`ControlledVocabulary`), Таблица авторитетности (`AuthorityRuleTable`)
+- `extension` — Коннектор (`Connector`)
+- `term` — Корпус (`Corpus`)
 
 ### Типы связей
 
@@ -59,7 +110,7 @@
 
 ### Триггеры решений
 
-| Триггер | Событие | Плейсхолдеров ждёт |
+| Триггер | Событие | Атрибутов ждёт |
 |---|---|---|
 | `acquisition_spec` | спецификация добычи | 5 |
 | `ingest_spec` | спецификация ингеста | 4 |
@@ -67,6 +118,36 @@
 | `enrichment_spec` | спецификация обогащения | 10 |
 | `synthesis_workshop_spec` | спецификация мастерской синтеза | 1 |
 | `first_vocabulary_consumer_spec` | первая спецификация, использующая словарь | 1 |
+
+### Статусы атрибутов
+
+| Статус | Закрыт | Требует триггера | Чего ждёт | Атрибутов |
+|---|---|---|---|---|
+| ✅ зафиксировано (`fixed`) | да | нет | — | 83 |
+| ⬜ плейсхолдер (`placeholder`) | нет | да | спецификацию: существование согласовано, состав не расписан | 22 |
+| 🔧 выбор реализации (`implementation_time`) | нет | нет | измерение на живых данных: роль зафиксирована, исполнитель нет | 5 |
+| ⏩ отложено (`deferred`) | нет | нет | этап 2: сознательно вне MVP | 4 |
+
+### Пометки атрибутов
+
+| Пометка | Что означает | Атрибутов |
+|---|---|---|
+| `identity` | этот атрибут И ЕСТЬ идентичность сущности | 7 |
+| `version` | этот атрибут И ЕСТЬ версия, чей бамп инвалидирует продукцию | 5 |
+
+### Группы
+
+Тематическая ось, для чтения. На проверки не влияет — этим занимаются слои.
+
+| Группа | Название | Сущностей |
+|---|---|---|
+| `acquisition` | Добыча | 5 |
+| `content` | Документ и содержимое | 7 |
+| `facts_graph` | Факты и граф | 7 |
+| `storage` | Реестр и хранение | 7 |
+| `processes` | Процессы | 7 |
+| `query_synthesis` | Запросы и синтез | 4 |
+| `cross_cutting` | Сквозное | 2 |
 
 ## Слои и направление зависимости
 
@@ -78,14 +159,14 @@
 
 | # | Слой | Сущностей | Состав |
 |---|---|---|---|
-| 0 | Мастерская синтеза (`synthesis`) | 2 | Deliverable, DeliverableValidator |
-| 1 | Слой запросов (`query`) | 2 | QueryLayer, TrendQuery |
-| 2 | Обогащение (`enrichment`) | 10 | Fragment, Translation, Claim, TypedReference, WorldEntity, GraphLayer, VerbalizedGraphContext, VectorIndex, LexicalIndex, Enrichment |
-| 3 | Триаж и дедупликация (`curation`) | 4 | Triage, Deduplication, MergeOperation, ExceptionQueue |
-| 4 | Реестр корпуса (`registry`) | 4 | Document, CorpusRegistry, Corpus, AdmissionMinimum |
-| 5 | Конвертация (`conversion`) | 4 | ContentVersion, CanonicalText, ConversionRecord, ProvenanceAnchor |
-| 6 | Добыча (`acquisition`) | 5 | Connector, AcquisitionChannel, AcquisitionAct, RawPayload, AcquisitionHint |
-| 7 | Сквозное основание (`foundation`) | 8 | ControlledVocabulary, AuthorityRuleTable, MachineStore, DerivationManifest, Workspace, Reconciliation, NetworkClient, WriterLock |
+| 0 | Мастерская синтеза (`synthesis`) | 2 | Валидатор деливерабла, Деливерабл |
+| 1 | Слой запросов (`query`) | 2 | Запрос тренда, Слой запросов |
+| 2 | Обогащение (`enrichment`) | 10 | Векторный индекс, Граф, Лексический индекс, Обогащение, Перевод, Словесная обвязка, Сущность мира, Типизированная ссылка, Утверждение, Фрагмент |
+| 3 | Триаж и дедупликация (`curation`) | 4 | Дедупликация, Очередь исключений, Склейка, Триаж |
+| 4 | Реестр корпуса (`registry`) | 4 | Документ, Корпус, Минимум приёмки, Реестр корпуса |
+| 5 | Конвертация (`conversion`) | 4 | Версия содержимого, Запись конвертации, Канонический текст, Якорь провенанса |
+| 6 | Добыча (`acquisition`) | 5 | Акт добычи, Канал добычи, Коннектор, Подсказка добычи, Сырой payload |
+| 7 | Сквозное основание (`foundation`) | 8 | Замок писателя, Контролируемый словарь, Манифест деривации, Машинное хранилище, Рабочее пространство, Реконсиляция, Сетевой клиент, Таблица авторитетности |
 
 ```mermaid
 flowchart TD
@@ -771,36 +852,47 @@ flowchart LR
 | Замок писателя (WriterLock) | single_lock | ✅ зафиксировано | один замок на все пишущие команды пространства |
 | Замок писателя (WriterLock) | lockfree_reads | ✅ зафиксировано | чтение по снимку, без замка |
 
-## Реестр плейсхолдеров
+## Реестр незакрытого
 
-Ничто из согласованного, но не расписанного, не должно потеряться:
-каждый плейсхолдер несёт триггер, при срабатывании которого состав
-обязан быть зафиксирован.
+Ничто из согласованного, но не расписанного, не теряется. Сюда попадает
+КАЖДЫЙ атрибут, чей статус не объявлен закрытым, — не только плейсхолдеры:
+ждущие измерения и отложенные за MVP тоже согласованы и тоже не расписаны.
+Членство решает флаг `settled` самого статуса, поэтому новый статус попадает
+в реестр тем, что объявлен, а не тем, что кто-то про него вспомнил.
 
-| Сущность | Атрибут-плейсхолдер | Триггер решения |
-|---|---|---|
-| Канал добычи (AcquisitionChannel) | declared_coverage | `acquisition_spec` |
-| Канал добычи (AcquisitionChannel) | homogeneity_declarations | `acquisition_spec` |
-| Канал добычи (AcquisitionChannel) | gate0_rules | `acquisition_spec` |
-| Канал добычи (AcquisitionChannel) | lifecycle_states | `acquisition_spec` |
-| Акт добычи (AcquisitionAct) | record_fields | `acquisition_spec` |
-| Документ (Document) | coordinate_scheme_whitelist | `ingest_spec` |
-| Документ (Document) | completeness_formula | `enrichment_spec` |
-| Запись конвертации (ConversionRecord) | record_fields | `conversion_spec` |
-| Перевод (Translation) | caching_detail | `enrichment_spec` |
-| Утверждение (Claim) | predicate_vocabulary | `enrichment_spec` |
-| Утверждение (Claim) | temporal_reference | `enrichment_spec` |
-| Типизированная ссылка (TypedReference) | full_type_vocabulary | `enrichment_spec` |
-| Сущность мира (WorldEntity) | normalization_table | `enrichment_spec` |
-| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | `first_vocabulary_consumer_spec` |
-| Таблица авторитетности (AuthorityRuleTable) | table_content | `enrichment_spec` |
-| Граф (GraphLayer) | meta_hierarchy | `enrichment_spec` |
-| Словесная обвязка (VerbalizedGraphContext) | template | `enrichment_spec` |
-| Реестр корпуса (CorpusRegistry) | record_schema | `ingest_spec` |
-| Минимум приёмки (AdmissionMinimum) | composition | `ingest_spec` |
-| Триаж (Triage) | ruleset | `ingest_spec` |
-| Очередь исключений (ExceptionQueue) | detail | `enrichment_spec` |
-| Валидатор деливерабла (DeliverableValidator) | check_rules | `synthesis_workshop_spec` |
+| Сущность | Атрибут | Статус | Чего ждёт |
+|---|---|---|---|
+| Акт добычи (AcquisitionAct) | record_fields | ⬜ плейсхолдер | `acquisition_spec` |
+| Валидатор деливерабла (DeliverableValidator) | check_rules | ⬜ плейсхолдер | `synthesis_workshop_spec` |
+| Векторный индекс (VectorIndex) | embedding_model | 🔧 выбор реализации | измерение на живых данных: роль зафиксирована, исполнитель нет |
+| Векторный индекс (VectorIndex) | precision_dims | 🔧 выбор реализации | измерение на живых данных: роль зафиксирована, исполнитель нет |
+| Граф (GraphLayer) | meta_hierarchy | ⬜ плейсхолдер | `enrichment_spec` |
+| Граф (GraphLayer) | community_summaries | ⏩ отложено | этап 2: сознательно вне MVP |
+| Документ (Document) | coordinate_scheme_whitelist | ⬜ плейсхолдер | `ingest_spec` |
+| Документ (Document) | completeness_formula | ⬜ плейсхолдер | `enrichment_spec` |
+| Запись конвертации (ConversionRecord) | record_fields | ⬜ плейсхолдер | `conversion_spec` |
+| Запрос тренда (TrendQuery) | citation_collapse | ⏩ отложено | этап 2: сознательно вне MVP |
+| Канал добычи (AcquisitionChannel) | declared_coverage | ⬜ плейсхолдер | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | homogeneity_declarations | ⬜ плейсхолдер | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | gate0_rules | ⬜ плейсхолдер | `acquisition_spec` |
+| Канал добычи (AcquisitionChannel) | lifecycle_states | ⬜ плейсхолдер | `acquisition_spec` |
+| Контролируемый словарь (ControlledVocabulary) | vocabulary_contents | ⬜ плейсхолдер | `first_vocabulary_consumer_spec` |
+| Лексический индекс (LexicalIndex) | engine | 🔧 выбор реализации | измерение на живых данных: роль зафиксирована, исполнитель нет |
+| Машинное хранилище (MachineStore) | engine | 🔧 выбор реализации | измерение на живых данных: роль зафиксирована, исполнитель нет |
+| Минимум приёмки (AdmissionMinimum) | composition | ⬜ плейсхолдер | `ingest_spec` |
+| Очередь исключений (ExceptionQueue) | detail | ⬜ плейсхолдер | `enrichment_spec` |
+| Перевод (Translation) | caching_detail | ⬜ плейсхолдер | `enrichment_spec` |
+| Реестр корпуса (CorpusRegistry) | record_schema | ⬜ плейсхолдер | `ingest_spec` |
+| Словесная обвязка (VerbalizedGraphContext) | template | ⬜ плейсхолдер | `enrichment_spec` |
+| Слой запросов (QueryLayer) | fusion_method | 🔧 выбор реализации | измерение на живых данных: роль зафиксирована, исполнитель нет |
+| Слой запросов (QueryLayer) | reranker | ⏩ отложено | этап 2: сознательно вне MVP |
+| Сущность мира (WorldEntity) | normalization_table | ⬜ плейсхолдер | `enrichment_spec` |
+| Сырой payload (RawPayload) | retention_policy | ⏩ отложено | этап 2: сознательно вне MVP |
+| Таблица авторитетности (AuthorityRuleTable) | table_content | ⬜ плейсхолдер | `enrichment_spec` |
+| Типизированная ссылка (TypedReference) | full_type_vocabulary | ⬜ плейсхолдер | `enrichment_spec` |
+| Триаж (Triage) | ruleset | ⬜ плейсхолдер | `ingest_spec` |
+| Утверждение (Claim) | predicate_vocabulary | ⬜ плейсхолдер | `enrichment_spec` |
+| Утверждение (Claim) | temporal_reference | ⬜ плейсхолдер | `enrichment_spec` |
 
 ## Реестр открытых обязательств
 
@@ -811,23 +903,23 @@ flowchart LR
 
 | Сущность | Порода | Незакрытое обязательство |
 |---|---|---|
-| Канал добычи (AcquisitionChannel) | `data` | не сказано, где хранится (нет связи класса placement) |
 | Акт добычи (AcquisitionAct) | `data` | нет атрибута-идентичности (marks: identity) |
-| Подсказка добычи (AcquisitionHint) | `derived` | нет версии: ни своей (marks: version), ни через связь |
-| Подсказка добычи (AcquisitionHint) | `derived` | не сказано, где хранится (нет связи класса placement) |
 | Версия содержимого (ContentVersion) | `data` | не сказано, где хранится (нет связи класса placement) |
-| Канонический текст (CanonicalText) | `data` | не сказано, где хранится (нет связи класса placement) |
-| Запись конвертации (ConversionRecord) | `data` | нет атрибута-идентичности (marks: identity) |
-| Фрагмент (Fragment) | `derived` | не сказано, где хранится (нет связи класса placement) |
-| Перевод (Translation) | `derived` | нет версии: ни своей (marks: version), ни через связь |
-| Перевод (Translation) | `derived` | не сказано, где хранится (нет связи класса placement) |
-| Типизированная ссылка (TypedReference) | `data` | нет атрибута-идентичности (marks: identity) |
-| Типизированная ссылка (TypedReference) | `data` | не сказано, где хранится (нет связи класса placement) |
-| Сущность мира (WorldEntity) | `data` | нет атрибута-идентичности (marks: identity) |
-| Сущность мира (WorldEntity) | `data` | не сказано, где хранится (нет связи класса placement) |
 | Граф (GraphLayer) | `derived` | не сказано, где хранится (нет связи класса placement) |
-| Словесная обвязка (VerbalizedGraphContext) | `derived` | нет версии: ни своей (marks: version), ни через связь |
-| Словесная обвязка (VerbalizedGraphContext) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Деливерабл (Deliverable) | `data` | нет атрибута-идентичности (marks: identity) |
+| Запись конвертации (ConversionRecord) | `data` | нет атрибута-идентичности (marks: identity) |
+| Канал добычи (AcquisitionChannel) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Канонический текст (CanonicalText) | `data` | не сказано, где хранится (нет связи класса placement) |
 | Манифест деривации (DerivationManifest) | `data` | нет атрибута-идентичности (marks: identity) |
 | Манифест деривации (DerivationManifest) | `data` | не сказано, где хранится (нет связи класса placement) |
-| Деливерабл (Deliverable) | `data` | нет атрибута-идентичности (marks: identity) |
+| Перевод (Translation) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Перевод (Translation) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Подсказка добычи (AcquisitionHint) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Подсказка добычи (AcquisitionHint) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Словесная обвязка (VerbalizedGraphContext) | `derived` | нет версии: ни своей (marks: version), ни через связь |
+| Словесная обвязка (VerbalizedGraphContext) | `derived` | не сказано, где хранится (нет связи класса placement) |
+| Сущность мира (WorldEntity) | `data` | нет атрибута-идентичности (marks: identity) |
+| Сущность мира (WorldEntity) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Типизированная ссылка (TypedReference) | `data` | нет атрибута-идентичности (marks: identity) |
+| Типизированная ссылка (TypedReference) | `data` | не сказано, где хранится (нет связи класса placement) |
+| Фрагмент (Fragment) | `derived` | не сказано, где хранится (нет связи класса placement) |

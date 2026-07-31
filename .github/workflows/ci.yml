@@ -1,0 +1,64 @@
+# The remote half of the gate. It runs the SAME four checks as the local gate
+# command in CLAUDE.md §10, with the same marker filter — on divergence, that
+# command is reconciled against this file, not the other way round.
+#
+# One job, not four. The checks themselves take about fifteen seconds together;
+# installing 113 locked dependencies dominates everything else, so splitting
+# them would pay for that install four times over and save no wall clock. What
+# splitting is actually for — telling which check failed — is already provided
+# by per-step status, and `if: '!cancelled()'` keeps a single failure from
+# hiding the other three. Split this the day a real matrix appears (several
+# Python versions or operating systems), not before.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned to an exact version: setup-uv no longer publishes moving major
+      # tags, and dependabot bumps this line.
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --all-groups -p 3.12
+
+      - name: Lint
+        run: uv run ruff check
+
+      # git decides what is ours, so this needs no path list and needs no edit
+      # when src/ appears. An empty file list would make the step pass without
+      # checking anything, which reads exactly like success — so say it loudly
+      # instead.
+      - name: Types
+        if: '!cancelled()'
+        run: |
+          files=$(git ls-files --cached --others --exclude-standard '*.py')
+          if [ -z "$files" ]; then
+            echo "NOTHING RAN: no Python files are tracked, so mypy checked nothing."
+            exit 1
+          fi
+          echo "$files" | xargs uv run mypy
+
+      - name: Tests
+        if: '!cancelled()'
+        run: uv run pytest -m "not heavy" --cov --cov-report=term-missing
+
+      - name: Entity map conformance
+        if: '!cancelled()'
+        run: uv run python docs/system_design/design_truth/entity_map_check.py

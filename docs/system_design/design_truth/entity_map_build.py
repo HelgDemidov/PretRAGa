@@ -23,35 +23,41 @@ Run: .venv/bin/python docs/system_design/design_truth/entity_map_build.py
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import networkx as nx
 import yaml
 
+try:  # libyaml is bundled in the standard PyYAML wheels; ~7x faster to parse
+    from yaml import CSafeLoader as _Loader
+except ImportError:  # pragma: no cover — pure-Python fallback where libyaml is absent
+    from yaml import SafeLoader as _Loader  # type: ignore[assignment]
+
 HERE = Path(__file__).parent
 SOURCE = HERE / "entity_map.yaml"
 MAP_VIEW = HERE / "entity_map.md"
 GLOSSARY_VIEW = HERE / "entity_glossary.md"
 
-STATUSES = {
-    "fixed": "✅ зафиксировано",
-    "placeholder": "⬜ плейсхолдер",
-    "implementation_time": "🔧 выбор реализации",
-    "deferred": "⏩ отложено",
-}
-
 # Obligation field -> the values it accepts. The obligations themselves live in
 # the map (`kinds` block), not here: a new kind is an entry there, not an edit.
+# Every field accepts `optional`, so loosening the schema anywhere is a one-word
+# data edit rather than a code change.
 OBLIGATION_FIELDS = {
-    "anchor": {"required", "forbidden"},
+    "anchor": {"required", "optional", "forbidden"},
     "identity": {"required", "optional", "forbidden"},
     "version": {"required", "optional"},
     "placement": {"required", "optional", "forbidden"},
     "hosts": {"required", "optional"},
-    "attributes": {"required", "forbidden"},
+    "attributes": {"required", "optional", "forbidden"},
 }
-MARKS = {"identity", "version"}
+
+# Vocabularies that MUST live in the map, never here. The rule they satisfy:
+# a code-level enumeration is justified only where the code branches on the
+# value itself. It never does — it branches on a status's declared properties
+# (`settled`, `requires_trigger`), so the names stay data.
+VOCABULARIES = ("kinds", "statuses", "marks", "relation_classes", "relation_types", "triggers", "layers")
 
 # Human labels for the obligations registry, keyed by (field, entity role).
 OBLIGATION_LABEL = {
@@ -62,8 +68,68 @@ OBLIGATION_LABEL = {
 }
 
 
+class _StrictLoader(_Loader):
+    """Loader that refuses a duplicate mapping key."""
+
+
+def _mapping_without_duplicates(loader: Any, node: Any, deep: bool = False) -> dict:
+    """PyYAML resolves a duplicate key silently in favour of the last one. In a
+    hand-written source of truth that is silent data loss: a careless paste can
+    delete a definition, and neither the validator nor a diff review would see
+    anything wrong — the file stays valid YAML and the field simply vanishes.
+    Raising instead turns the quietest possible failure into the loudest."""
+    mapping: dict = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"duplicate key {key!r} — the later value would silently win",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _mapping_without_duplicates
+)
+
+
+def load_yaml(text: str) -> dict:
+    """The ONE place the map is parsed, so every consumer — generator, checker
+    and tests — gets the same semantics and the same speed. The C loader is a
+    drop-in for SafeLoader: verified to yield an identical structure, identical
+    key order and identical values; on top of it, a duplicate key raises rather
+    than quietly discarding one of the two."""
+    parsed: dict = yaml.load(text, Loader=_StrictLoader)
+    return parsed
+
+
 def _attrs(entity: dict) -> list[dict]:
     return entity.get("attributes") or []
+
+
+def _status_label(data: dict, status: str) -> str:
+    spec = data["statuses"][status]
+    return f"{spec['icon']} {spec['ru']}"
+
+
+def ru_key(text: str) -> str:
+    """Collation key for Russian names. `ё` sorts with `е` instead of after `я`,
+    where its codepoint would otherwise put it. Deliberately locale-independent:
+    the generated views are compared byte for byte, so the order must not depend
+    on the machine's locale settings."""
+    return text.lower().replace("ё", "е")
+
+
+def entities_ru_sorted(data: dict, ids: Iterable[str] | None = None) -> list[dict]:
+    """Every human-facing enumeration of entities goes through here, so they all
+    order the same way — by the Russian name, with the code name breaking ties."""
+    by_id = {e["id"]: e for e in data["entities"]}
+    chosen = list(by_id.values()) if ids is None else [by_id[i] for i in ids]
+    return sorted(chosen, key=lambda e: (ru_key(e["ru"]), e["id"]))
 
 
 def _types_of_class(data: dict, cls: str) -> set[str]:
@@ -91,11 +157,22 @@ def anchor_required(data: dict, entity: dict) -> bool:
 
 def _validate_vocabularies(data: dict) -> list[str]:
     errors: list[str] = []
-    for block in ("kinds", "relation_classes", "relation_types", "triggers", "layers"):
+    for block in VOCABULARIES:
         if not data.get(block):
             errors.append(f"missing top-level {block} block (closed vocabulary)")
     if errors:
         return errors
+
+    for sid, spec in data["statuses"].items():
+        for field in ("ru", "icon", "awaits"):
+            if not str(spec.get(field, "")).strip():
+                errors.append(f"status {sid} has no {field}")
+        if not isinstance(spec.get("settled"), bool):
+            errors.append(f"status {sid}: settled must be true or false")
+
+    for mid, text in data["marks"].items():
+        if not str(text).strip():
+            errors.append(f"mark {mid} has no description")
 
     for kid, spec in data["kinds"].items():
         if not str(spec.get("ru", "")).strip():
@@ -197,13 +274,16 @@ def validate(data: dict) -> list[str]:
                 "defined in prose is not ready to enter the truth"
             )
         for a in _attrs(e):
-            if a.get("status") not in STATUSES:
+            status = data["statuses"].get(a.get("status"))
+            if status is None:
                 errors.append(f"unknown status {a.get('status')!r} on {e['id']}.{a.get('name')}")
-            if a.get("status") == "placeholder" and not a.get("trigger"):
-                errors.append(f"placeholder without trigger: {e['id']}.{a.get('name')}")
+            elif status.get("requires_trigger") and not a.get("trigger"):
+                errors.append(
+                    f"status {a['status']} requires a trigger: {e['id']}.{a.get('name')}"
+                )
             if a.get("trigger") is not None and a["trigger"] not in data["triggers"]:
                 errors.append(f"unknown trigger {a['trigger']!r} on {e['id']}.{a['name']}")
-            if a.get("marks") is not None and a["marks"] not in MARKS:
+            if a.get("marks") is not None and a["marks"] not in data["marks"]:
                 errors.append(f"unknown marks {a['marks']!r} on {e['id']}.{a['name']}")
 
     graph: nx.DiGraph[str] = nx.DiGraph()
@@ -250,7 +330,7 @@ def obligations(data: dict) -> list[tuple[str, str, str]]:
     }
 
     out: list[tuple[str, str, str]] = []
-    for e in data["entities"]:
+    for e in entities_ru_sorted(data):
         kind = data["kinds"].get(e.get("kind"))
         if kind is None:
             continue
@@ -357,6 +437,28 @@ def group_projections(data: dict) -> str:
     return "\n".join(out)
 
 
+def entity_index(data: dict) -> str:
+    """The one flat list of every entity. Every other listing in this file is
+    grouped by some axis — by kind, by layer, by group — which answers "what
+    is in this bucket" but never "what do we have, in one place". Sorted by id
+    so it can be scanned like an index."""
+    degree: dict[str, int] = {e["id"]: 0 for e in data["entities"]}
+    for r in data["relations"]:
+        degree[r["from"]] += 1
+        degree[r["to"]] += 1
+    out = [
+        "| Сущность | Имя в коде | Порода | Слой | Группа | Атрибутов | Связей |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for e in entities_ru_sorted(data):
+        out.append(
+            f"| {e['ru']} | `{e['id']}` | {data['kinds'][e['kind']]['ru']} | "
+            f"{data['layers'][e['layer']]} | {data['groups'][e['group']]} | "
+            f"{len(_attrs(e))} | {degree[e['id']]} |"
+        )
+    return "\n".join(out)
+
+
 def vocabulary_tables(data: dict) -> str:
     members: dict[str, list[str]] = {}
     for e in data["entities"]:
@@ -373,8 +475,10 @@ def vocabulary_tables(data: dict) -> str:
             f"| `{kid}` ({spec['ru']}) | {spec.get('note', '')} | {cells} | {len(members.get(kid, []))} |"
         )
     out.append("")
+    out.append("Состав каждой породы (порядок — как в указателе):\n")
     for kid, spec in data["kinds"].items():
-        out.append(f"- `{kid}` — {', '.join(members.get(kid, [])) or '—'}")
+        listed = [f"{e['ru']} (`{e['id']}`)" for e in entities_ru_sorted(data, members.get(kid, []))]
+        out.append(f"- `{kid}` — {', '.join(listed) or '—'}")
     out.append("")
 
     inverse = [t for t, s in data["relation_types"].items() if s.get("inverse_of")]
@@ -402,7 +506,7 @@ def vocabulary_tables(data: dict) -> str:
     out.append("")
 
     out.append("### Триггеры решений\n")
-    out.append("| Триггер | Событие | Плейсхолдеров ждёт |")
+    out.append("| Триггер | Событие | Атрибутов ждёт |")
     out.append("|---|---|---|")
     waiting: dict[str, int] = {}
     for e in data["entities"]:
@@ -411,6 +515,41 @@ def vocabulary_tables(data: dict) -> str:
                 waiting[a["trigger"]] = waiting.get(a["trigger"], 0) + 1
     for tid, label in data["triggers"].items():
         out.append(f"| `{tid}` | {label} | {waiting.get(tid, 0)} |")
+    out.append("")
+
+    used_status: dict[str, int] = dict.fromkeys(data["statuses"], 0)
+    used_marks: dict[str, int] = dict.fromkeys(data["marks"], 0)
+    for e in data["entities"]:
+        for a in _attrs(e):
+            used_status[a["status"]] += 1
+            if a.get("marks"):
+                used_marks[a["marks"]] += 1
+    out.append("### Статусы атрибутов\n")
+    out.append("| Статус | Закрыт | Требует триггера | Чего ждёт | Атрибутов |")
+    out.append("|---|---|---|---|---|")
+    for sid, spec in data["statuses"].items():
+        out.append(
+            f"| {_status_label(data, sid)} (`{sid}`) | {'да' if spec['settled'] else 'нет'} | "
+            f"{'да' if spec.get('requires_trigger') else 'нет'} | {spec['awaits']} | {used_status[sid]} |"
+        )
+    out.append("")
+
+    out.append("### Пометки атрибутов\n")
+    out.append("| Пометка | Что означает | Атрибутов |")
+    out.append("|---|---|---|")
+    for mid, text in data["marks"].items():
+        out.append(f"| `{mid}` | {text} | {used_marks[mid]} |")
+    out.append("")
+
+    per_group: dict[str, int] = {}
+    for e in data["entities"]:
+        per_group[e["group"]] = per_group.get(e["group"], 0) + 1
+    out.append("### Группы\n")
+    out.append("Тематическая ось, для чтения. На проверки не влияет — этим занимаются слои.\n")
+    out.append("| Группа | Название | Сущностей |")
+    out.append("|---|---|---|")
+    for gid, title in data["groups"].items():
+        out.append(f"| `{gid}` | {title} | {per_group.get(gid, 0)} |")
     out.append("")
     return "\n".join(out)
 
@@ -429,7 +568,8 @@ def layer_section(data: dict) -> str:
     out = ["| # | Слой | Сущностей | Состав |", "|---|---|---|---|"]
     for layer, title in data["layers"].items():
         ids = members.get(layer, [])
-        out.append(f"| {rank[layer]} | {title} (`{layer}`) | {len(ids)} | {', '.join(ids) or '—'} |")
+        listed = ", ".join(e["ru"] for e in entities_ru_sorted(data, ids))
+        out.append(f"| {rank[layer]} | {title} (`{layer}`) | {len(ids)} | {listed or '—'} |")
     out.append("")
 
     crossing: dict[tuple[str, str], int] = {}
@@ -473,18 +613,32 @@ def attribute_tables(data: dict) -> str:
                     note = (note + " — " if note else "") + f"триггер: `{a['trigger']}`"
                 if a.get("marks"):
                     note = (note + " — " if note else "") + f"**{a['marks']}**"
-                out.append(f"| {e['ru']} ({e['id']}) | {a['name']} | {STATUSES[a['status']]} | {note} |")
+                out.append(
+                    f"| {e['ru']} ({e['id']}) | {a['name']} | {_status_label(data, a['status'])} | {note} |"
+                )
         out.append("")
     return "\n".join(out)
 
 
-def placeholder_registry(data: dict) -> str:
+def unsettled_registry(data: dict) -> str:
+    """Every attribute whose status is not `settled`, whatever the status.
+
+    The registry used to cover placeholders only, which quietly left the
+    attributes awaiting a measurement or a later stage outside the one
+    mechanism whose whole promise is that nothing agreed-but-unspecified is
+    lost. Membership is now decided by the status's own `settled` flag, so a
+    new status joins the registry by being declared, not by being remembered."""
     rows = []
-    for e in data["entities"]:
+    for e in entities_ru_sorted(data):
         for a in _attrs(e):
-            if a["status"] == "placeholder":
-                rows.append(f"| {e['ru']} ({e['id']}) | {a['name']} | `{a['trigger']}` |")
-    header = ["| Сущность | Атрибут-плейсхолдер | Триггер решения |", "|---|---|---|"]
+            status = data["statuses"][a["status"]]
+            if status.get("settled"):
+                continue
+            waits = f"`{a['trigger']}`" if a.get("trigger") else status["awaits"]
+            rows.append(
+                f"| {e['ru']} ({e['id']}) | {a['name']} | {_status_label(data, a['status'])} | {waits} |"
+            )
+    header = ["| Сущность | Атрибут | Статус | Чего ждёт |", "|---|---|---|---|"]
     return "\n".join(header + rows)
 
 
@@ -500,13 +654,13 @@ def obligation_registry(data: dict) -> str:
 
 
 def stats(data: dict) -> str:
-    counts = dict.fromkeys(STATUSES, 0)
+    counts = dict.fromkeys(data["statuses"], 0)
     total_attrs = 0
     for e in data["entities"]:
         for a in _attrs(e):
             counts[a["status"]] += 1
             total_attrs += 1
-    parts = [f"{STATUSES[s]}: {n}" for s, n in counts.items()]
+    parts = [f"{_status_label(data, s)}: {n}" for s, n in counts.items()]
     return (
         f"Сущностей: {len(data['entities'])} в {len(data['kinds'])} породах; "
         f"связей: {len(data['relations'])} в {len(data['relation_types'])} типах; "
@@ -529,10 +683,19 @@ def render(data: dict) -> str:
             "",
             stats(data),
             "",
+            "## Указатель сущностей",
+            "",
+            "Единственный плоский перечень: всё, что есть, по алфавиту имени в коде.",
+            "Остальные перечни в этом файле сгруппированы — по породам, слоям, группам.",
+            "",
+            entity_index(data),
+            "",
             "## Словари карты",
             "",
-            "Закрытые словари: значение вне словаря — ошибка, новое значение — запись",
-            "в `entity_map.yaml`, а не правка скриптов.",
+            "Вся номенклатура, которой оперирует модель. Словари закрыты: значение вне",
+            "словаря — ошибка, новое значение — запись в `entity_map.yaml`, а не правка",
+            "скриптов. Код не ветвится по именам статусов — только по их свойствам",
+            "(`settled`, `requires_trigger`), поэтому имена остаются данными.",
             "",
             vocabulary_tables(data),
             "## Слои и направление зависимости",
@@ -563,13 +726,15 @@ def render(data: dict) -> str:
             "## Атрибуты и их статусы",
             "",
             attribute_tables(data),
-            "## Реестр плейсхолдеров",
+            "## Реестр незакрытого",
             "",
-            "Ничто из согласованного, но не расписанного, не должно потеряться:",
-            "каждый плейсхолдер несёт триггер, при срабатывании которого состав",
-            "обязан быть зафиксирован.",
+            "Ничто из согласованного, но не расписанного, не теряется. Сюда попадает",
+            "КАЖДЫЙ атрибут, чей статус не объявлен закрытым, — не только плейсхолдеры:",
+            "ждущие измерения и отложенные за MVP тоже согласованы и тоже не расписаны.",
+            "Членство решает флаг `settled` самого статуса, поэтому новый статус попадает",
+            "в реестр тем, что объявлен, а не тем, что кто-то про него вспомнил.",
             "",
-            placeholder_registry(data),
+            unsettled_registry(data),
             "",
             "## Реестр открытых обязательств",
             "",
@@ -616,7 +781,7 @@ def render_glossary(data: dict) -> str:
 
 
 def main() -> int:
-    data: dict[str, Any] = yaml.safe_load(SOURCE.read_text(encoding="utf-8"))
+    data: dict[str, Any] = load_yaml(SOURCE.read_text(encoding="utf-8"))
     errors = validate(data)
     if errors:
         print("VALIDATION ERRORS:")
