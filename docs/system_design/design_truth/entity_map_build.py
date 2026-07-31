@@ -1,7 +1,7 @@
-"""Validate entity_map.yaml as a graph and generate BOTH derived views:
-entity_map.md (vocabularies + graph + attribute tables + registries) and
-entity_glossary.md (prose glossary: hand-written conventions preamble +
-per-entity definitions from the map).
+"""Validate entity_map.yaml as a graph and generate ALL THREE derived views:
+entity_map.md (vocabularies, tables, registries), entity_map_diagrams.md (every
+mermaid block, nothing else) and entity_glossary.md (prose glossary: the
+hand-written conventions preamble plus per-entity definitions).
 
 Source of truth: entity_map.yaml — the ONLY hand-written file of the system
 and the ONLY entry channel for entity/term changes: entities, attributes,
@@ -39,6 +39,7 @@ HERE = Path(__file__).parent
 SOURCE = HERE / "entity_map.yaml"
 MAP_VIEW = HERE / "entity_map.md"
 GLOSSARY_VIEW = HERE / "entity_glossary.md"
+DIAGRAMS_VIEW = HERE / "entity_map_diagrams.md"
 
 # Obligation field -> the values it accepts. The obligations themselves live in
 # the map (`kinds` block), not here: a new kind is an entry there, not an edit.
@@ -605,18 +606,6 @@ def layer_section(data: dict) -> str:
         out.append(f"| {rank[layer]} | {title} (`{layer}`) | {len(ids)} | {listed or '—'} |")
     out.append("")
 
-    crossing: dict[tuple[str, str], int] = {}
-    for r in edges:
-        key = (layer_of[r["from"]], layer_of[r["to"]])
-        crossing[key] = crossing.get(key, 0) + 1
-    out.append("```mermaid")
-    out.append("flowchart TD")
-    for layer, title in data["layers"].items():
-        out.append(f'    {layer}["{rank[layer]} — {title}"]')
-    for (a, b), n in crossing.items():
-        out.append(f'    {a} -- "{n}" --> {b}')
-    out.append("```")
-    out.append("")
     out.append(f"Связей класса `dependency`: {len(edges)} из {len(data['relations'])}. Все они:")
     out.append("")
     out.append("| Связь | Из слоя | В слой | Вниз по стеку |")
@@ -627,6 +616,27 @@ def layer_section(data: dict) -> str:
         out.append(f"| {r['from']} → {r['to']} (`{r['type']}`) | {a} | {b} | {direction} |")
     out.append("")
     return "\n".join(out)
+
+
+def layer_diagram(data: dict) -> str:
+    """The layer stack with the dependency edges crossing each boundary. Lives
+    in the diagram file; the tables that go with it stay beside the rest of the
+    prose, because a table reads as text and a mermaid block does not."""
+    rank = layer_rank(data)
+    layer_of = {e["id"]: e["layer"] for e in data["entities"]}
+    dep = _types_of_class(data, "dependency")
+    crossing: dict[tuple[str, str], int] = {}
+    for r in data["relations"]:
+        if r["type"] in dep:
+            key = (layer_of[r["from"]], layer_of[r["to"]])
+            crossing[key] = crossing.get(key, 0) + 1
+    lines = ["```mermaid", "flowchart TD"]
+    for layer, title in data["layers"].items():
+        lines.append(f'    {layer}["{rank[layer]} — {title}"]')
+    for (a, b), n in crossing.items():
+        lines.append(f'    {a} -- "{n}" --> {b}')
+    lines.append("```")
+    return "\n".join(lines)
 
 
 def path_section(data: dict) -> str:
@@ -762,21 +772,15 @@ def render(data: dict) -> str:
             "намеренно — там направление ребра не совпадает с направлением зависимости кода.",
             "",
             layer_section(data),
-            "## Сводная межгрупповая схема",
+            "Стек нарисован в [схемах](entity_map_diagrams.md).",
             "",
-            "Группы как узлы; метка ребра — число связей, пересекающих границу групп.",
+            "## Схемы",
             "",
-            group_summary_block(data),
-            "",
-            "## Проекции по группам",
-            "",
-            "Сущности группы — в рамке; скруглённые узлы — соседи из других групп;",
-            "показаны все связи, касающиеся группы.",
-            "",
-            group_projections(data),
-            "## Полный граф связей",
-            "",
-            mermaid_block(data),
+            "Все диаграммы вынесены в [entity_map_diagrams.md](entity_map_diagrams.md):",
+            "стек слоёв, сводная межгрупповая схема, проекции по группам, полный граф.",
+            "Исходник mermaid занимал половину этого файла и в редакторе читался как",
+            "сплошная плита — а рисуется он только в предпросмотре, где текстовым",
+            "таблицам делать нечего.",
             "",
             "## Атрибуты и их статусы",
             "",
@@ -799,6 +803,51 @@ def render(data: dict) -> str:
             "считает и называет, но не блокирует.",
             "",
             obligation_registry(data),
+            "",
+        ]
+    )
+
+
+def render_diagrams(data: dict) -> str:
+    """Every mermaid block, and nothing else. Split out because the source was
+    half of the map view and reads as a slab in an editor, while the diagrams
+    themselves only appear in a preview pane — where tables are not what you
+    came for. Generated from the same YAML by the same script, so the split
+    costs no risk of drift: one writer, one source."""
+    return "\n".join(
+        [
+            "# Схемы карты PretRAGa",
+            "",
+            "СГЕНЕРИРОВАНО из `entity_map.yaml` скриптом `entity_map_build.py` — руками",
+            "не править. Цифры, таблицы и реестры — в [карте](entity_map.md); определения",
+            "прозой — в [словаре](entity_glossary.md).",
+            "",
+            "**Смотреть в предпросмотре:** `Ctrl+Shift+V` во вкладке или `Ctrl+K V` сбоку.",
+            "В самом редакторе mermaid остаётся текстом — так и должно быть. Отдельного",
+            "расширения не нужно: рендер встроен в VS Code начиная с 1.121.",
+            "",
+            "## Слои и направление зависимости",
+            "",
+            "Метка ребра — сколько связей класса `dependency` пересекает границу слоёв.",
+            "Ребро вверх по стеку — ошибка сборки.",
+            "",
+            layer_diagram(data),
+            "",
+            "## Сводная межгрупповая схема",
+            "",
+            "Группы как узлы; метка ребра — число связей, пересекающих границу групп.",
+            "",
+            group_summary_block(data),
+            "",
+            "## Проекции по группам",
+            "",
+            "Сущности группы — в рамке; скруглённые узлы — соседи из других групп;",
+            "показаны все связи, касающиеся группы.",
+            "",
+            group_projections(data),
+            "## Полный граф связей",
+            "",
+            mermaid_block(data),
             "",
         ]
     )
@@ -844,10 +893,11 @@ def main() -> int:
             print(f"  - {err}")
         return 1
     MAP_VIEW.write_text(render(data), encoding="utf-8")
+    DIAGRAMS_VIEW.write_text(render_diagrams(data), encoding="utf-8")
     GLOSSARY_VIEW.write_text(render_glossary(data), encoding="utf-8")
     print(f"OK: {stats(data)}")
-    print(f"written: {MAP_VIEW}")
-    print(f"written: {GLOSSARY_VIEW}")
+    for path in (MAP_VIEW, DIAGRAMS_VIEW, GLOSSARY_VIEW):
+        print(f"written: {path}")
     return 0
 
 

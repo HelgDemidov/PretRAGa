@@ -8,7 +8,7 @@ Check classes (grow as the codebase appears):
                             definitions-required and the closed vocabularies:
                             the map is the ONLY entry channel for entities,
                             terms, their definitions and their kinds)
-  2. generated views      — entity_map.md and entity_glossary.md must equal a
+  2. generated views      — all three (map, diagrams, glossary) must equal a
                             fresh render of the map: catches both a forgotten
                             regeneration and a hand edit of a generated file
   3. code anchors         — every `implements` prefix must resolve on disk;
@@ -51,11 +51,12 @@ def check_map_integrity(data: dict) -> list[str]:
 
 
 def check_generated_views(data: dict) -> list[str]:
-    """Both generated views must equal a fresh render of the map — anything
+    """Every generated view must equal a fresh render of the map — anything
     else means a forgotten regeneration or a hand edit of a generated file."""
     errors: list[str] = []
     expected = {
         entity_map_build.MAP_VIEW: entity_map_build.render(data),
+        entity_map_build.DIAGRAMS_VIEW: entity_map_build.render_diagrams(data),
         entity_map_build.GLOSSARY_VIEW: entity_map_build.render_glossary(data),
     }
     for path, content in expected.items():

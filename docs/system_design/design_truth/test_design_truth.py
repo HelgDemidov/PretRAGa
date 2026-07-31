@@ -67,8 +67,12 @@ def test_committed_map_validates(data: dict[str, Any]) -> None:
 
 @pytest.mark.parametrize(
     ("path", "renderer"),
-    [(build.MAP_VIEW, build.render), (build.GLOSSARY_VIEW, build.render_glossary)],
-    ids=["entity_map.md", "entity_glossary.md"],
+    [
+        (build.MAP_VIEW, build.render),
+        (build.DIAGRAMS_VIEW, build.render_diagrams),
+        (build.GLOSSARY_VIEW, build.render_glossary),
+    ],
+    ids=["entity_map.md", "entity_map_diagrams.md", "entity_glossary.md"],
 )
 def test_committed_view_is_fresh(data: dict[str, Any], path: Path, renderer: Any) -> None:
     assert path.read_text(encoding="utf-8") == renderer(data)
