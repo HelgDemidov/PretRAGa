@@ -259,8 +259,7 @@ def test_anchor_requirement_follows_the_kind(data: dict[str, Any]) -> None:
 
 def test_every_named_path_is_connected_in_the_map(data: dict[str, Any]) -> None:
     """§6 of the vision states the provenance chain as a load-bearing claim.
-    It was once wrong — the map had no Deliverable -> Claim edge, so the vision
-    asserted a link the truth did not contain, and nothing could tell."""
+    Prose cannot notice when a hop stops existing; this can."""
     assert data.get("paths"), "no named paths — the test would be vacuous"
     for pid, spec in data["paths"].items():
         hops = spec["hops"]
