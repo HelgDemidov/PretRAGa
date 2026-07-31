@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 import schema_lock
 
 
@@ -50,8 +49,8 @@ BREAKING = [
     # at class creation, so the lock never sees it. Tested in test_kinds.py.
     ("model_config narrowed (extra: forbid)", "facts.py",
      '    open_questions = (Open(question="small predicate vocabulary",',
-     '    model_config = {"frozen": True, "extra": "forbid"}\n'
-     '    open_questions = (Open(question="small predicate vocabulary",', "model_config"),
+     ('    model_config = {"frozen": True, "extra": "forbid"}\n'
+      '    open_questions = (Open(question="small predicate vocabulary",'), "model_config"),
 ]
 
 
