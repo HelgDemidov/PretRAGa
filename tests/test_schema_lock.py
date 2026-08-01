@@ -37,6 +37,11 @@ def _edit(ring: Path, module: str, old: str, new: str) -> None:
     target.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def _next_major(ring: Path) -> str:
+    stored = json.loads((ring / "schema.lock.json").read_text())["version"]
+    return f"{int(stored.split('.')[0]) + 1}.0.0"
+
+
 def test_the_untouched_ring_is_green(ring: Path) -> None:
     done = _run(ring)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -45,7 +50,8 @@ def test_the_untouched_ring_is_green(ring: Path) -> None:
 BREAKING = [
     ("field removed", "facts.py", "    extractor_version: int\n", "", "field removed"),
     ("field renamed", "facts.py", "    normalized: str", "    text: str", "field removed"),
-    ("type narrowed away", "provenance.py", "    content_hash: ContentHash\n    media_type: str",
+    ("type narrowed away", "provenance.py",
+     '    content_hash: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")\n    media_type: str',
      "    content_hash: str\n    media_type: str", "type "),
     ("new required field", "document.py", "    lifecycle: Lifecycle",
      "    lifecycle: Lifecycle\n    jurisdiction: str", "REQUIRED"),
@@ -92,17 +98,27 @@ def test_a_new_vocabulary_member_is_additive(ring: Path) -> None:
     assert "additive" in done.stdout and "BREAKING" not in done.stdout, done.stdout
 
 
+_MOVABLE = ('"""Probe module."""\nfrom __future__ import annotations\n\n'
+           "from pretraga.domain.kinds import Value\n\n\n"
+           'class Movable(Value):\n    """A synthetic concept with no production coupling."""\n\n'
+           "    payload: str\n")
+
+
 def test_moving_a_concept_between_modules_is_not_a_change(ring: Path) -> None:
     """The lock is about shape, not location. A refactor that moves a class must
-    not read as data corruption, or the check trains people to ignore it."""
-    facts = ring / "src" / "pretraga" / "domain" / "facts.py"
-    text = facts.read_text(encoding="utf-8")
-    cut = text.index("class Translation(Value):")
-    facts.write_text(text[:cut], encoding="utf-8")
-    (ring / "src" / "pretraga" / "domain" / "translation.py").write_text(
-        '"""Translations live here now."""\nfrom __future__ import annotations\n\n'
-        "from pretraga.domain.kinds import ContentHash, Value\n\n\n" + text[cut:],
-        encoding="utf-8")
+    not read as data corruption, or the check trains people to ignore it.
+
+    A synthetic class with no production coupling, not `Translation`: the
+    earlier version spliced a real concept's fields out of `facts.py`, so any
+    unrelated future change to Translation's shape broke this test for a
+    reason that has nothing to do with what it verifies (measured: adding
+    `Field(pattern=...)` to `of_text` orphaned the moved snippet's missing
+    `pydantic.Field` import)."""
+    (ring / "src" / "pretraga" / "domain" / "synthetic_a.py").write_text(_MOVABLE, encoding="utf-8")
+    assert _run_write(ring).returncode == 0, "record the synthetic concept before moving it"
+
+    (ring / "src" / "pretraga" / "domain" / "synthetic_a.py").unlink()
+    (ring / "src" / "pretraga" / "domain" / "synthetic_b.py").write_text(_MOVABLE, encoding="utf-8")
     done = _run(ring)
     assert done.returncode == 0, done.stdout
 
@@ -156,11 +172,12 @@ def test_a_breaking_write_without_a_new_version_is_refused(ring: Path) -> None:
 
 
 def test_a_breaking_write_with_a_new_version_succeeds(ring: Path) -> None:
+    bumped = _next_major(ring)
     _edit(ring, "facts.py", "    extractor_version: int\n", "")
-    done = _run_write(ring, "--version", "2.0.0")
+    done = _run_write(ring, "--version", bumped)
     assert done.returncode == 0, done.stdout
     lock = json.loads((ring / "schema.lock.json").read_text())
-    assert lock["version"] == "2.0.0"
+    assert lock["version"] == bumped
     assert _run(ring).returncode == 0
 
 
@@ -273,12 +290,13 @@ def test_a_ring_without_history_says_so_instead_of_passing_quietly(ring: Path) -
 
 
 def test_an_additive_write_keeps_the_stored_version(ring: Path) -> None:
+    before = json.loads((ring / "schema.lock.json").read_text())["version"]
     _edit(ring, "document.py", "    lifecycle: Lifecycle",
           "    lifecycle: Lifecycle\n    note: str | None = None")
     done = _run_write(ring)
     assert done.returncode == 0, done.stdout
     lock = json.loads((ring / "schema.lock.json").read_text())
-    assert lock["version"] == "1.0.0"
+    assert lock["version"] == before
 
 
 def test_generic_parameters_are_recorded_in_full() -> None:
@@ -377,7 +395,7 @@ def test_a_wire_format_change_that_touches_no_field_blocks(ring: Path, name: str
           "from __future__ import annotations\n\n"
           "from pydantic import computed_field, field_serializer")
     _edit(ring, "facts.py", ANCHOR, ANCHOR + member)
-    assert _run_write(ring, "--version", "2.0.0").returncode == 0, (
+    assert _run_write(ring, "--version", _next_major(ring)).returncode == 0, (
         "recording the member is itself a wire-format change: allowed WITH a bump")
     _edit(ring, "facts.py", member, "")
     done = _run(ring)
@@ -403,7 +421,7 @@ def test_an_alias_channel_change_blocks(ring: Path, name: str, before: str, afte
     _edit(ring, "facts.py", "from __future__ import annotations",
           "from __future__ import annotations\n\nfrom pydantic import Field")
     _edit(ring, "facts.py", "    normalized: str", f"    normalized: str = Field({before})")
-    assert _run_write(ring, "--version", "2.0.0").returncode == 0
+    assert _run_write(ring, "--version", _next_major(ring)).returncode == 0
     _edit(ring, "facts.py", before, after)
     done = _run(ring)
     assert done.returncode == 1, f"{name} was accepted:\n{done.stdout}"

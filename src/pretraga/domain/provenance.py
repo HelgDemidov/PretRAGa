@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from pretraga.domain.kinds import ContentHash, Open, Trigger, Value
 
@@ -24,12 +24,18 @@ class CharSpan(Value):
     start: int = Field(ge=0)
     end: int = Field(ge=0)
 
+    @model_validator(mode="after")
+    def _ordered(self) -> CharSpan:
+        if self.start > self.end:
+            raise ValueError(f"CharSpan: start ({self.start}) > end ({self.end})")
+        return self
+
 
 class RawPayload(Value):
     """The downloaded body exactly as received. A primary artifact, not a
     derived one: the web rots, so re-fetching restores it only in part."""
 
-    content_hash: ContentHash
+    content_hash: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
     media_type: str
 
 
@@ -40,14 +46,14 @@ class ConversionRecord(Value):
     open_questions = (Open(question="full record composition", trigger=Trigger.CONVERSION_SPEC),)
     converter_name: str
     converter_entry_version: int
-    source: ContentHash
+    source: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CanonicalText(Value):
     """The Markdown rendering of a content version: the single carrying format
     of the corpus, and the space anchors address."""
 
-    content_hash: ContentHash
+    content_hash: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
     conversion: ConversionRecord
     body: str
 
@@ -58,7 +64,7 @@ class ProvenanceAnchor(Value):
     text is chunked."""
 
     version_key: str
-    text_hash: ContentHash
+    text_hash: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
     span: CharSpan
 
 
@@ -66,6 +72,6 @@ class Fragment(Value):
     """A derived unit of search. Re-created freely when chunking changes, so
     long-lived references to fragments are forbidden — they point at anchors."""
 
-    text_hash: ContentHash
+    text_hash: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
     span: CharSpan
     chunker_version: int

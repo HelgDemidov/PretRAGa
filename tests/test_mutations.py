@@ -17,6 +17,7 @@ at all, hidden behind this self-inflicted red.
 """
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,35 @@ KINDS = "src/pretraga/domain/kinds.py"
 AUDIT = "src/pretraga/usecases/provenance_audit.py"
 ANSWER = "src/pretraga/usecases/answering.py"
 CONF = "tests/test_conformance.py"
+PROVENANCE = "src/pretraga/domain/provenance.py"
+
+_VALIDATOR_DECORATORS = {"model_validator", "field_validator", "root_validator", "validator"}
+
+
+def _modules_with_imperative_validators() -> set[str]:
+    """Same trick as the guarded-tool list: the set of modules owing a planted
+    mutation is DERIVED from the domain/usecases source, not maintained by
+    hand. Declarative constraints (`Field(ge=0)`, `Field(pattern=...)`) are
+    already covered by schema_lock's generic constraint diff; only imperative
+    validator logic (a `@model_validator`/`@field_validator` method body) needs
+    its own planted defect, because that logic is arbitrary code the lock
+    cannot diff structurally."""
+    hits: set[str] = set()
+    for ring_name in ("domain", "usecases"):
+        ring_dir = ROOT / "src" / "pretraga" / ring_name
+        for py in sorted(ring_dir.rglob("*.py")):
+            if "__pycache__" in py.parts:
+                continue
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for dec in node.decorator_list:
+                    target = dec.func if isinstance(dec, ast.Call) else dec
+                    name = target.id if isinstance(target, ast.Name) else getattr(target, "attr", None)
+                    if name in _VALIDATOR_DECORATORS:
+                        hits.add(str(py.relative_to(ROOT)))
+    return hits
 
 
 class Mutation(NamedTuple):
@@ -92,6 +122,9 @@ MUTATIONS = [
              "        errors = classification_errors(s) + static_import_escapes(ns.src / "
              'ns.package.split(".")[0])\n        if errors:',
              "        errors = []\n        if errors:"),
+    # --- provenance value invariants ---------------------------------------
+    Mutation("CharSpan accepts an inverted span", PROVENANCE,
+             "        if self.start > self.end:", "        if False:"),
     # --- kind obligations -------------------------------------------------
     Mutation("value may unset frozen", KINDS,
              '        if not cls.model_config.get("frozen"):', "        if False:"),
@@ -206,11 +239,16 @@ def test_mutation_anchor_matches_exactly_once(mutation: Mutation) -> None:
 
 def test_every_tool_and_guarded_module_is_mutated() -> None:
     """A NEW tool cannot ship without planted mutations: the demanded set is
-    derived from the filesystem, not from this file's memory of it."""
+    derived from the filesystem, not from this file's memory of it. Same for a
+    NEW imperative validator anywhere in domain/usecases — declarative
+    constraints are already covered by schema_lock's generic diff, so only
+    modules with actual validator-decorated code owe a planted mutation."""
     tools = {f"tools/{p.name}" for p in (ROOT / "tools").glob("*.py")}
     mutated = {m.filename for m in MUTATIONS}
     assert tools <= mutated, f"tool module(s) without a mutation: {sorted(tools - mutated)}"
-    assert mutated == tools | {KINDS, AUDIT, ANSWER, CONF}
+    needed = tools | {KINDS, AUDIT, ANSWER, CONF} | _modules_with_imperative_validators()
+    assert mutated == needed, (
+        f"missing: {sorted(needed - mutated)}, extra: {sorted(mutated - needed)}")
 
 
 def test_every_suite_spawning_test_is_marked_heavy() -> None:
