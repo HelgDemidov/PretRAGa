@@ -4,7 +4,7 @@ description: Audit every checkable claim in CLAUDE.md and memory against live co
 
 # /memory-sync — audit and synchronize project memory against the real repo state
 
-A recurring task, not a one-off: bring EVERY checkable claim in the root instruction file (`CLAUDE.md`) and in the memory directory in line with the live code and history. Triggers: manually, on the post-merge reminder (N merges since the last run), or before a large batch of work that will rely on memory being correct. Run it in a fresh session, with this task alone in the session.
+A recurring task, not a one-off: bring EVERY checkable claim in the root instruction file (`CLAUDE.md`) and in the memory directory in line with the live code and history. Triggers: manually, on the post-merge reminder (10 merges since the last run), or before a large batch of work that will rely on memory being correct. Run it in a fresh session, with this task alone in the session.
 
 This is an audit of **truth, not completeness**: do NOT add new facts — that is the post-merge sync's job — only fix stale or false claims and flag unverifiable ones. Human fact-checking is impossible at this volume, which is exactly why the evidence discipline below is MANDATORY, not optional.
 

@@ -56,7 +56,7 @@ The rule for when one exists: regenerate the generated parts first, then touch o
 
 ## Step 5 — Audit trigger check (report only)
 
-Read the memory-sync audit's last-run record (`docs/memory/memory_sync/`, created by that audit on its first run — **as of 2026-08-01 it does not exist, so this step's expected outcome is the reminder below**). If it is missing, remind the user that `/memory-sync` has never run. Otherwise count merges since the recorded commit — if the count is at or above the threshold, tell the user it is time to run `/memory-sync` in a fresh session. **This step only reports; NEVER start the audit from here** — it is a different job with different rights over the same files.
+Read the memory-sync audit's last-run record (`docs/memory/memory_sync/last-run.md`, created by that audit on its first run). If it is missing, remind the user that `/memory-sync` has never run. Otherwise count merges since the recorded commit — if the count is at or above 10 (the trigger threshold set in `.claude/commands/memory-sync.md`), tell the user it is time to run `/memory-sync` in a fresh session. **This step only reports; NEVER start the audit from here** — it is a different job with different rights over the same files.
 
 ## Step 6 — Commit documentation changes
 
