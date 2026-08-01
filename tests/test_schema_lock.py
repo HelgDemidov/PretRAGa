@@ -417,6 +417,42 @@ def test_a_changed_generic_parameter_is_breaking(ring: Path) -> None:
     assert "type" in done.stdout and "BREAKING" in done.stdout, done.stdout
 
 
+def test_a_nested_annotated_constraint_renders_cleanly() -> None:
+    """Field() cannot reach an element type inside a generic — the only way to
+    constrain `tuple[ContentHash, ...]`'s elements is `Annotated[ContentHash,
+    StringConstraints(...)]` on the element itself. str()'s own repr of that
+    metadata embeds every None-valued field; this must route through
+    _constraint_repr() instead, same as a top-level Field() constraint."""
+    from typing import Annotated, NewType
+
+    from pydantic import StringConstraints
+
+    Hash = NewType("Hash", str)
+    ann = tuple[Annotated[Hash, StringConstraints(pattern=r"^[0-9a-f]{2}$")], ...]
+    got = schema_lock._type_name(ann)
+    assert got == (f"tuple[Annotated[{Hash.__module__}.Hash, "
+                   "StringConstraints(pattern='^[0-9a-f]{2}$')], ...]")
+    assert "strip_whitespace" not in got, got
+
+
+def test_generic_element_constraints_are_recorded_cleanly() -> None:
+    """Regression pin for issue #23: AcquisitionAct.brought's element pattern
+    must appear as a clean Annotated[...] in the lock, not str()'s embedded
+    None-field repr of StringConstraints."""
+    shape = schema_lock.derive()
+    recorded = shape["AcquisitionAct"]["fields"]["brought"]["type"]
+    assert "StringConstraints(pattern=" in recorded, recorded
+    assert "strip_whitespace" not in recorded, recorded
+
+
+def test_a_tightened_generic_element_constraint_is_breaking(ring: Path) -> None:
+    _edit(ring, "acquisition.py", r'StringConstraints(pattern=r"^[0-9a-f]{64}$")',
+          r'StringConstraints(pattern=r"^[0-9a-f]{2}$")')
+    done = _run(ring)
+    assert done.returncode == 1, done.stdout
+    assert "type" in done.stdout and "BREAKING" in done.stdout, done.stdout
+
+
 def test_a_default_factory_is_named_without_a_memory_address() -> None:
     from pydantic import BaseModel, Field
 
