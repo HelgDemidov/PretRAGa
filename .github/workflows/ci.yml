@@ -85,8 +85,15 @@ jobs:
       #
       # Pull requests only. It costs several times the six steps together —
       # measure before moving it, and put it back on every push the day it
-      # drops under two minutes. Core count does not help: measured no slower
-      # on two cores than on four, so the work is serial.
+      # drops under two minutes.
+      #
+      # -n auto: each mutation runs on its OWN ring (tmp_path copy), so the
+      # outer loop is embarrassingly parallel — this is explicit parallelism
+      # via pytest-xdist, not "more cores lying around". Measured on 4 cores:
+      # 627s serial -> 252s with -n 4, same 50/50 result. An earlier version
+      # of this comment claimed core count did not help; that measurement
+      # never actually parallelised the run, so of course idle cores did
+      # nothing — it was not evidence the work is serial.
       #
       # A RED CONTROL INVALIDATES THE WHOLE RUN, not just its own line. The
       # inner suite stops at the first failure, so if the untouched ring is
@@ -94,4 +101,4 @@ jobs:
       # than by the mutation — 47 green lines meaning nothing. Measured.
       - name: Mutation harness
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-        run: uv run pytest -m heavy -q
+        run: uv run pytest -m heavy -q -n auto
