@@ -233,6 +233,73 @@ def test_constraint_repr_falls_back_to_repr_for_non_dataclasses() -> None:
     assert schema_lock._constraint_repr(NotADataclass()) == "NotADataclass()"
 
 
+def test_constraint_repr_names_a_callable_field_without_an_address() -> None:
+    """AfterValidator.func and friends: named like a default factory — module
+    and qualname, never repr, which embeds a memory address."""
+    from pydantic import AfterValidator
+
+    def _positive(v: int) -> int:
+        return v
+
+    got = schema_lock._constraint_repr(AfterValidator(_positive))
+    assert "0x" not in got
+    assert got == f"AfterValidator(func={_positive.__module__}.{_positive.__qualname__})"
+
+
+def test_constraint_repr_distinguishes_same_named_validators_in_different_modules() -> None:
+    import types
+
+    from pydantic import AfterValidator
+
+    a, b = types.ModuleType("stage_a"), types.ModuleType("stage_b")
+    src = "def _check(v):\n    return v\n"
+    exec(compile(src, "a", "exec"), a.__dict__)  # noqa: S102
+    exec(compile(src, "b", "exec"), b.__dict__)  # noqa: S102
+    a._check.__module__, b._check.__module__ = "stage_a", "stage_b"
+
+    ra = schema_lock._constraint_repr(AfterValidator(a._check))
+    rb = schema_lock._constraint_repr(AfterValidator(b._check))
+    assert ra != rb, (ra, rb)
+
+
+def test_a_lambda_validator_is_refused(ring: Path) -> None:
+    _edit(ring, "document.py", "from enum import StrEnum\n\nfrom pydantic import Field",
+          "from enum import StrEnum\nfrom typing import Annotated\n\n"
+          "from pydantic import AfterValidator, Field")
+    _edit(ring, "document.py", "    edition: int",
+          "    edition: Annotated[int, AfterValidator(lambda v: v)]")
+    done = _run(ring)
+    assert done.returncode == 1
+    assert "validator uses a lambda" in done.stdout + done.stderr
+
+
+def test_a_named_validator_is_recorded_stably_across_runs(ring: Path) -> None:
+    """The residual this closes: Annotated callable metadata was unusable
+    because repr() embeds a memory address. A named validator must lock
+    cleanly and reproducibly."""
+    _edit(ring, "document.py", "from enum import StrEnum\n\nfrom pydantic import Field",
+          "from enum import StrEnum\nfrom typing import Annotated\n\n"
+          "from pydantic import AfterValidator, Field")
+    _edit(ring, "document.py",
+          "class ContentVersion(Value):",
+          'def _positive(v: int) -> int:\n'
+          '    if v < 1:\n        raise ValueError("must be positive")\n'
+          "    return v\n\n\n"
+          "class ContentVersion(Value):")
+    _edit(ring, "document.py", "    edition: int",
+          "    edition: Annotated[int, AfterValidator(_positive)]")
+    done = _run_write(ring, "--version", _next_major(ring))
+    assert done.returncode == 0, done.stdout
+    lock_text = (ring / "schema.lock.json").read_text(encoding="utf-8")
+    assert "0x" not in lock_text
+    assert "_positive" in lock_text
+
+    before = (ring / "schema.lock.json").read_bytes()
+    assert _run_write(ring).returncode == 0
+    after = (ring / "schema.lock.json").read_bytes()
+    assert before == after, "the lock must be byte-identical across runs"
+
+
 def test_serialisers_are_named_by_the_fields_they_rewrite() -> None:
     from pydantic import BaseModel, field_serializer, model_serializer
 

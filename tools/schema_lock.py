@@ -103,12 +103,16 @@ def _constraint_repr(m: Any) -> str:
     """Non-None dataclass fields only: a NEW field a future annotated-types
     bump adds, defaulting to None, must not move this string — measured on
     StringConstraints.ascii_only (added between 2.12 and 2.13, a bump already
-    in this repo's history)."""
+    in this repo's history). A callable field (AfterValidator.func and
+    friends) is named like a default factory — module and qualname, never
+    repr, which embeds a memory address; the lambda refusal is in derive(),
+    where the field name is available for the error."""
     if not dataclasses.is_dataclass(m) or isinstance(m, type):
         return repr(m)
     kept = [(f.name, getattr(m, f.name)) for f in dataclasses.fields(m)
             if getattr(m, f.name) is not None]
-    return f"{type(m).__name__}({', '.join(f'{k}={v!r}' for k, v in kept)})"
+    parts = (f"{k}={_factory_name(v)}" if callable(v) else f"{k}={v!r}" for k, v in kept)
+    return f"{type(m).__name__}({', '.join(parts)})"
 
 
 def _field_contract(finfo: FieldInfo) -> dict[str, Any]:
@@ -175,6 +179,14 @@ def derive(package: str = "pretraga.domain") -> dict[str, Any]:
                     "module and qualname, and every lambda in one scope shares a qualname — so "
                     "swapping one for another rewrites the default of every record that omitted "
                     "the field with nothing to show for it. Give the factory a name.")
+            for m in fi.metadata or ():
+                for cf in dataclasses.fields(m) if dataclasses.is_dataclass(m) else ():
+                    v = getattr(m, cf.name)
+                    if callable(v) and "<lambda>" in _factory_name(v):
+                        raise ValueError(
+                            f"SCHEMA: {name}.{fname} validator uses a lambda ({type(m).__name__}."
+                            f"{cf.name}). Every lambda in one scope shares a qualname — give it "
+                            "a name.")
         shape[name] = {
             # The kind is decided by the base class, never guessed from a
             # field name: a Value that happens to carry a field called `uuid`
