@@ -5,9 +5,9 @@
 #
 # Runs on push+PR, docs-only changes excluded (nothing there is exercised
 # by any test). Threshold 180s on GitHub's runners specifically, not
-# local — measured 129s; revert to PR-only if it exceeds that.
-# `-n auto`: each mutation runs its own ring, real parallelism — measured
-# 627s serial -> 252s on 4 local cores, same result.
+# local; revert to PR-only if it exceeds that.
+# `-n auto`: each mutation runs its own ring, so this is real parallelism,
+# not idle cores.
 # RED CONTROL INVALIDATES THE WHOLE RUN: inner suite stops at first
 # failure, so a broken ring reads every mutation as killed by that break.
 

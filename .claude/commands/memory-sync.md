@@ -45,6 +45,7 @@ The sync direction is strictly one-way: **code → memory.** Never "fix" code, t
 
 - **`user`** — do NOT touch the body.
 - **`feedback`** — the body (the lesson, the Why) is untouchable; audit only the **anchors**: paths, functions, flags, commands. A dead anchor → update it, or append "(mechanism retired; the principle still holds)". Deleting or weakening a feedback entry is FORBIDDEN.
+- **Stale run measurements** (durations, timings, "measured Ns") that are illustrative colour rather than the point of the claim — delete on sight wherever found, including inside a `feedback` body; this is the one narrow exception to the untouchable-body rule, because the number was never the lesson. Keep a measurement only when the value itself IS the evidence for a decision or threshold. When in doubt, keep — this is not a licence to trim feedback prose generally.
 - **`project`** — full C1–C3 audit, conservative on C4–C5. Rationale and rejected alternatives are class C4.
 - **`reference`** — out of scope; verifying external resources is a separate task.
 - **Autonomously deleting a memory file is FORBIDDEN.** Flag wholly stale files as deletion or compression candidates; the user decides.
