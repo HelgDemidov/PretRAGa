@@ -169,6 +169,9 @@ MUTATIONS = [
              '        if not cls.model_config.get("frozen"):',
              "tests/test_kinds.py::test_an_underscore_name_does_not_exempt_the_frozen_obligation"),
     # --- schema lock ------------------------------------------------------
+    Mutation("constraint repr records every field again", LOCK,
+             "            if getattr(m, f.name) is not None]", "            if True]",
+             "tests/test_schema_lock.py::test_constraint_repr_omits_none_valued_fields"),
     Mutation("removed field not breaking", LOCK,
              '            breaking.append(f"{name}.{f}: field removed")', "            pass",
              "tests/test_schema_lock.py::test_a_breaking_change_blocks"),
