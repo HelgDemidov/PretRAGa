@@ -8,8 +8,12 @@ scenario — and the whole suite must go red on it.
 
 Marked `heavy`: it runs the suite once per mutation. The cheap anchor tests run
 in the ordinary gate, so a moved line surfaces in seconds, not after the whole
-heavy pass. The inner run filters on `not heavy`, so the copy's own copy of
-this module never recurses.
+heavy pass. The inner run excludes THIS module outright, not merely `heavy`:
+every mutation rewrites its own anchor, so `test_mutation_anchor_matches_
+exactly_once` for the planted one is guaranteed to fail on its own account,
+`-x` stops there, and the suite reads "killed" without the tool's own tests
+ever running. Measured: 4 of 47 mutations had no other test constraining them
+at all, hidden behind this self-inflicted red.
 """
 from __future__ import annotations
 
@@ -55,16 +59,16 @@ MUTATIONS = [
              "    out.structural += _namespace_packages(package)", "    pass"),
     Mutation("module-level __getattr__ accepted", TRUTH,
              '        if "__getattr__" in vars(mod):', "        if False:"),
-    Mutation("a class may claim it lives elsewhere", TRUTH,
-             "            if declared_in != modname:", "            if False:"),
+    Mutation("a submodule import is classified as a table", TRUTH,
+             "            if isinstance(obj, types.ModuleType):", "            if False:"),
     Mutation("duplicate bare names accepted", TRUTH,
              "            if name in out.module_of:", "            if False:"),
     Mutation("nested concepts accepted", TRUTH,
              "    out.structural += _nested_concepts(out, entity, value)", "    pass"),
     Mutation("public callable without a role accepted", TRUTH,
              "    elif callable(obj):", "    elif False:"),
-    Mutation("assignments stop counting as declarations", TRUTH,
-             "        elif isinstance(node, ast.Assign):", "        elif False:"),
+    Mutation("ImportFrom names escape the import set", TRUTH,
+             "        elif isinstance(node, ast.ImportFrom):", "        elif False:"),
     Mutation("sum of non-concepts accepted", TRUTH, "        if stray:", "        if False:"),
     Mutation("vocabulary docstring not required", TRUTH,
              '        if not (voc.__doc__ or "").strip():', "        if False:"),
@@ -84,6 +88,10 @@ MUTATIONS = [
     Mutation("framework allowlist covers everything", TRUTH,
              '            if modname == f"{package}.kinds" and name in FRAMEWORK:',
              '            if modname == f"{package}.kinds":'),
+    Mutation("build writes an invalid survey unconditionally", TRUTH,
+             "        errors = classification_errors(s) + static_import_escapes(ns.src / "
+             'ns.package.split(".")[0])\n        if errors:',
+             "        errors = []\n        if errors:"),
     # --- kind obligations -------------------------------------------------
     Mutation("value may unset frozen", KINDS,
              '        if not cls.model_config.get("frozen"):', "        if False:"),
@@ -114,8 +122,8 @@ MUTATIONS = [
              '            elif a.get("default") != b.get("default") or a.get("factory") != '
              'b.get("factory"):',
              "            elif False:"),
-    Mutation("breaking write accepted without a version bump", LOCK,
-             '        if breaking and new_version == stored["version"]:',
+    Mutation("breaking write accepted without a major version bump", LOCK,
+             "        if breaking and not proper_bump:",
              "        if False:"),
     Mutation("computed field removal not breaking", LOCK,
              '            breaking.append(f"{name}.{f}: computed field removed — it is written '
@@ -136,7 +144,7 @@ MUTATIONS = [
     Mutation("deleting the lock skips the version decision", LOCK,
              '        stored = _lock_at(lock_path, "HEAD")', "        stored = None"),
     Mutation("lock drift against history ignored", LOCK,
-             '        if drift and stored["version"] == locked["version"]:',
+             "        if drift and not proper_bump:",
              "        if False:"),
     Mutation("model_config change invisible", LOCK,
              '                breaking.append(f"{name}: model_config[{k}] {oc.get(k)} -> '
@@ -175,7 +183,7 @@ MUTATIONS = [
 def run_suite(ring: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-x", "-m", "not heavy",
-         "-p", "no:cacheprovider", "tests"],
+         "-p", "no:cacheprovider", "--ignore=tests/test_mutations.py", "tests"],
         capture_output=True, text=True, check=False, timeout=SUITE_TIMEOUT_S, cwd=ring,
         env={"PYTHONPATH": f"{ring / 'src'}:{ring / 'tools'}", "PATH": "/usr/bin:/bin"})
 

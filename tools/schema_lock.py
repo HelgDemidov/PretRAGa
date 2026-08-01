@@ -30,6 +30,7 @@ name the affected tables exactly.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import importlib
 import json
 import subprocess
@@ -51,6 +52,16 @@ for _extra in (ROOT / "src", ROOT / "tools"):
 
 FIX_LINE = ("  fix: bump the schema version; wherever this shape is persisted, the data "
             "migration ships in the SAME commit; then rerun --write")
+
+
+def _major(version: str) -> int | None:
+    """The leading integer of a dotted version string, or None if it is not
+    shaped like one. A breaking change demands a MAJOR bump specifically —
+    any differing string used to satisfy the version-changed check, which
+    accepted a cosmetic or even backward-sorting change as evidence a human
+    decided this was breaking."""
+    head = version.split(".", 1)[0]
+    return int(head) if head.lstrip("-").isdigit() else None
 
 
 def _type_name(annotation: Any) -> str:
@@ -116,13 +127,24 @@ def _field_contract(finfo: FieldInfo) -> dict[str, Any]:
 
 
 def _serializers(model: Any) -> list[str]:
-    """Custom serialisers, by the fields they rewrite. They change what is
-    written without changing any field, so nothing else in this contract moves
-    when one is added, removed or repointed."""
+    """Custom validators and serialisers, by what they act on. Validators
+    decide whether a record LOADS at all, so an added one is exactly the class
+    of change this lock exists to catch, same as a serialiser rewriting what
+    is written. The category set is PROJECTED from the pydantic decorator
+    registry rather than enumerated: the same trick the guarded-tool list
+    uses, so an eighth category pydantic adds later does not need a matching
+    edit here. computed_fields is excluded — it is captured separately via
+    model_computed_fields, which carries the field itself rather than a bare
+    method name."""
     dec = model.__pydantic_decorators__
-    out = [f"field({','.join(sorted(d.info.fields))}):{d.info.mode}"
-           for d in dec.field_serializers.values()]
-    out += [f"model:{d.info.mode}" for d in dec.model_serializers.values()]
+    out = []
+    for cat in dataclasses.fields(dec):
+        if cat.name == "computed_fields":
+            continue
+        for d in getattr(dec, cat.name).values():
+            fields = getattr(d.info, "fields", None)
+            tag = f"{cat.name}({','.join(sorted(fields))})" if fields else cat.name
+            out.append(f"{tag}:{d.info.mode}")
     return sorted(out)
 
 
@@ -237,9 +259,9 @@ def classify(old: dict[str, Any], new: dict[str, Any]) -> tuple[list[str], list[
             if ocf[f] != ncf[f]:
                 breaking.append(f"{name}.{f}: computed field {ocf[f]} -> {ncf[f]}")
         if o.get("serializers", []) != n.get("serializers", []):
-            breaking.append(f"{name}: serialisers {o.get('serializers', [])} -> "
-                            f"{n.get('serializers', [])} — the written form of an existing field "
-                            "changes without the field changing")
+            breaking.append(f"{name}: validators/serialisers {o.get('serializers', [])} -> "
+                            f"{n.get('serializers', [])} — whether a record loads, or what is "
+                            "written, changes without any field changing")
         oc, nc = o.get("config", {}), n.get("config", {})
         for k in sorted(set(oc) | set(nc)):
             if oc.get(k) != nc.get(k):
@@ -295,13 +317,15 @@ def check(package: str = "pretraga.domain", lock_path: Path = LOCK) -> int:
     else:
         trunk, stored = base
         drift, _ = classify(stored["shape"], locked["shape"])
-        if drift and stored["version"] == locked["version"]:
+        old_major, new_major = _major(stored["version"]), _major(locked["version"])
+        proper_bump = old_major is not None and new_major is not None and new_major > old_major
+        if drift and not proper_bump:
             print(f"SCHEMA: {len(drift)} breaking change(s) in the lock against {trunk} "
-                  f"(v{stored['version']}) with the version unchanged")
+                  f"(v{stored['version']}) without a MAJOR version bump (now v{locked['version']})")
             for d in drift:
                 print(f"  - {d}")
             print("  fix: the bump is the human decision; a rewritten lock file is not evidence "
-                  "that it was taken")
+                  "that it was taken, and only a major bump states it")
             return 1
     breaking, additive = classify(locked["shape"], fresh)
     if breaking:
@@ -334,10 +358,13 @@ def write(package: str, version: str | None, lock_path: Path) -> int:
     if stored is not None:
         breaking, _ = classify(stored["shape"], fresh)
         new_version = version or stored["version"]
-        if breaking and new_version == stored["version"]:
+        old_major, new_major = _major(stored["version"]), _major(new_version)
+        proper_bump = old_major is not None and new_major is not None and new_major > old_major
+        if breaking and not proper_bump:
             print(f"SCHEMA: refusing to overwrite v{stored['version']}: "
-                  f"{len(breaking)} breaking change(s) need a NEW --version — "
-                  "the bump is the human decision, the machine will not make it")
+                  f"{len(breaking)} breaking change(s) need a MAJOR --version bump, not merely a "
+                  "differing string — the bump is the human decision, the machine will not guess "
+                  "which digit means it was taken")
             return 1
     else:
         new_version = version or "1.0.0"

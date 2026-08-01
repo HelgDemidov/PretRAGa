@@ -15,24 +15,29 @@ is TOTAL — it keeps no list of names, so it cannot inflate and cannot go stale
   table          module-level data the domain declares (FAILURE_MODES is one)
   unclassified   ERROR: it entered the domain without a role
 
-WHAT counts as the public surface is decided from the SOURCE, not from the
-module dict: a name the module DECLARES (class, def, assignment, type alias)
-owes a role, a name it merely IMPORTS is surveyed where it is declared. Reading
-the module dict instead made the survey both too wide and too narrow — too wide
-because `annotations`, `hashlib` and `ClassVar` are public entries in it, and
-too narrow because everything that was not a class or a function fell through a
-silent `else`, which is how FAILURE_MODES ended up with no role at all.
+WHAT counts as the public surface is every public name the module DICT holds,
+MINUS what it imports: the set of ways to bind a name via import is closed (two
+AST node types), while the set of ways to declare one is open and grows with
+the language, so the complement is taken the other way around. This also
+answers where a name is surveyed — wherever it is actually BOUND, never
+wherever a self-reported `__module__` claims — so nesting a declaration inside
+`try:`/`if:`/`with:`/`for:` is free (an import inside a branch is still an
+import) and a class that rewrites its own `__module__` after creation changes
+nothing: the survey never asked it.
 
 The framework module (kinds.py) is surveyed like any other, minus an explicit
 CLOSED allowlist of the framework names themselves — so nothing can be smuggled
 in beside them (measured: before this, a class planted in kinds.py escaped the
-survey entirely, and so did anything in the package __init__).
+survey entirely, and so did anything in the package __init__). A submodule
+Python binds onto its parent package as an import side effect, not a
+declaration, so module objects are skipped explicitly (measured: without the
+skip, `domain.kinds` classified itself as a table).
 
-Four ways a name used to leave the surface without leaving the code, each now
+Three ways a name used to leave the surface without leaving the code, each now
 refused where it happens: a subpackage with no __init__.py (measured: unseen by
 this survey AND by import-linter, so a domain module could reach the network
-from one), a concept nested inside another concept, a module-level __getattr__,
-and a class whose __module__ names somewhere it was not declared.
+from one), a concept nested inside another concept, and a module-level
+__getattr__.
 
 Whether a port has an implementation is NOT decided here. Two ports with the
 same method names are indistinguishable by shape, so a structural count reports
@@ -149,24 +154,19 @@ def _namespace_packages(package: str) -> list[str]:
     return out
 
 
-def _declared_names(path: Path) -> set[str]:
-    """The public names a module DECLARES, read from its source.
-
-    The module dict cannot answer this: it also holds everything imported, so
-    `annotations`, `hashlib` and `ClassVar` look exactly like model surface. A
-    declaration is a class, a def, a type alias or an assignment; anything else
-    in the dict arrived by import and is surveyed where it was declared."""
+def _imported_names(path: Path) -> set[str]:
+    """Names a module IMPORTS, read from its source: the complement of this
+    set over the module dict is what it declares. `ast.walk`, not `.body`, so
+    an import inside `try:`/`if:`/`with:`/`for:` still counts — nesting a
+    declaration inside one of those used to hide it from the top-level-only
+    reading this replaces."""
     out: set[str] = set()
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
-            out.add(node.name)
-        elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
-            out.add(node.name.id)
-        elif isinstance(node, ast.Assign):
-            out.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            out.add(node.target.id)
-    return {n for n in out if not n.startswith("_")}
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            out.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            out.update(a.asname or a.name for a in node.names if a.name != "*")
+    return out
 
 
 def _is_union(obj: object) -> bool:
@@ -245,18 +245,13 @@ def survey(package: str = PACKAGE) -> Survey:
             out.structural.append(
                 f"{modname}: a module-level __getattr__ — a name that exists only on access is "
                 "invisible to any survey of the module; bind it at module level instead")
-        for name in sorted(_declared_names(path)):
+        imported = _imported_names(path)
+        for name in sorted(n for n in vars(mod) if not n.startswith("_") and n not in imported):
             if modname == f"{package}.kinds" and name in FRAMEWORK:
                 continue
-            if name not in vars(mod):
-                continue  # declared under a conditional the import did not take
             obj = vars(mod)[name]
-            declared_in = getattr(obj, "__module__", modname) if isinstance(obj, type) else modname
-            if declared_in != modname:
-                out.structural.append(
-                    f"{name} ({modname}): declared here but reports __module__={declared_in}, "
-                    "so it is skipped here as an import and absent there — surveyed nowhere")
-                continue
+            if isinstance(obj, types.ModuleType):
+                continue  # a submodule Python bound onto the package, not a declaration
             if name in out.module_of:
                 out.structural.append(
                     f"{name}: declared in both {out.module_of[name]} and {modname} — survey, "
@@ -492,7 +487,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--src", type=Path, default=SRC)
     ns = ap.parse_args(argv)
     if ns.build:
-        ns.glossary.write_text(render_glossary(survey(ns.package)), encoding="utf-8")
+        s = survey(ns.package)
+        errors = classification_errors(s) + static_import_escapes(ns.src / ns.package.split(".")[0])
+        if errors:
+            print(f"TRUTH: {len(errors)} error(s) — refusing to build a glossary from an invalid "
+                  "survey")
+            for e in errors:
+                print(f"  - {e}")
+            return 1
+        ns.glossary.write_text(render_glossary(s), encoding="utf-8")
         print(f"written: {ns.glossary}")
         return 0
     return run(ns.glossary, ns.package, ns.src)
