@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from pydantic import Field
+
 from pretraga.domain.kinds import ContentHash, Entity, MintedId, Open, Trigger, Value
 
 
@@ -38,7 +40,7 @@ class ContentVersion(Value):
 
     language: str
     edition: int
-    payload: ContentHash
+    payload: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class Document(Entity):
