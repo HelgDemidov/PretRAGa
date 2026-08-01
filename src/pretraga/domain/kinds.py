@@ -19,7 +19,7 @@ import uuid
 from enum import StrEnum
 from typing import Any, ClassVar, NewType
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 MintedId = NewType("MintedId", str)
 ContentHash = NewType("ContentHash", str)
@@ -97,7 +97,7 @@ class Entity(_Concept):
     """A concept with a lifecycle. Identity is minted once, at first
     appearance, and never recomputed; comparison is a separate mechanism."""
 
-    uuid: MintedId
+    uuid: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:

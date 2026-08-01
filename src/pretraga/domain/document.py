@@ -51,5 +51,5 @@ class Document(Entity):
                            trigger=Trigger.INGEST_SPEC),)
     origin: tuple[OriginCoordinate, ...]
     lifecycle: Lifecycle
-    channel: MintedId
+    channel: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     versions: tuple[ContentVersion, ...] = ()
