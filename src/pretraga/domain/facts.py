@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from pydantic import Field
+
 from pretraga.domain.kinds import ContentHash, Entity, MintedId, Open, Trigger, Value
 from pretraga.domain.provenance import ProvenanceAnchor, ProvenanceLabel
 
@@ -50,6 +52,6 @@ class Translation(Value):
     """A lens for reading and embedding; never a carrier of anchors, because
     extraction runs on the original."""
 
-    of_text: ContentHash
+    of_text: ContentHash = Field(pattern=r"^[0-9a-f]{64}$")
     language: str
     body: str

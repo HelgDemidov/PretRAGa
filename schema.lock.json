@@ -144,7 +144,9 @@
         },
         "content_hash": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -209,7 +211,9 @@
         }
       },
       "kind": "value",
-      "serializers": []
+      "serializers": [
+        "model_validators:after"
+      ]
     },
     "Claim": {
       "computed": {},
@@ -295,7 +299,9 @@
         },
         "payload": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -338,7 +344,9 @@
         },
         "source": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -552,7 +560,9 @@
         },
         "text_hash": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -624,7 +634,9 @@
         },
         "text_hash": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -672,7 +684,9 @@
       "fields": {
         "content_hash": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -809,7 +823,9 @@
         },
         "of_text": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{64}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -980,5 +996,5 @@
       "serializers": []
     }
   },
-  "version": "1.0.0"
+  "version": "2.0.0"
 }
