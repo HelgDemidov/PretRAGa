@@ -17,7 +17,9 @@
         },
         "channel": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -39,7 +41,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -80,7 +84,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -414,7 +420,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -465,7 +473,9 @@
       "fields": {
         "channel": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -498,7 +508,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -855,7 +867,9 @@
         },
         "document": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -888,7 +902,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -941,7 +957,9 @@
         },
         "source": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -982,7 +1000,9 @@
         },
         "uuid": {
           "alias": null,
-          "constraints": [],
+          "constraints": [
+            "_PydanticGeneralMetadata(pattern='^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+          ],
           "default": null,
           "discriminator": null,
           "factory": null,
@@ -996,5 +1016,5 @@
       "serializers": []
     }
   },
-  "version": "2.0.0"
+  "version": "3.0.0"
 }

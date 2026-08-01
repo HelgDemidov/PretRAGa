@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from pydantic import Field
+
 from pretraga.domain.kinds import ContentHash, Entity, MintedId, Open, Trigger
 
 
@@ -33,7 +35,7 @@ class AcquisitionChannel(Entity):
 class AcquisitionAct(Entity):
     """A machine journal record: which channel, when, what it brought."""
 
-    channel: MintedId
+    channel: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     occurred_at: str
     brought: tuple[ContentHash, ...]
 
@@ -43,7 +45,7 @@ class TriageVerdict(Entity):
     a new verdict; the old one stays, because deletion does not exist."""
 
     open_questions = (Open(question="rule set", trigger=Trigger.INGEST_SPEC),)
-    document: MintedId
+    document: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     decision: Decision
     reason: str
     policy_version: int

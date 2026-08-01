@@ -42,7 +42,7 @@ class TypedReference(Value):
     """An edge between documents. Derived deterministically; a finding made in
     text carries an anchor."""
 
-    source: MintedId
+    source: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     target_coordinate: str
     kind: ReferenceType
     anchor: ProvenanceAnchor | None = None
