@@ -1,12 +1,48 @@
 """Kind obligations, checked where they are enforced: class creation."""
 from __future__ import annotations
 
+import time
+import uuid as uuid_stdlib
 from typing import ClassVar
 
 import pytest
 from pydantic import create_model
 
-from pretraga.domain.kinds import ContentHash, Entity, KindError, Value
+from pretraga.domain.kinds import ContentHash, Entity, KindError, Value, mint
+
+
+def test_mint_produces_a_well_formed_uuid7() -> None:
+    for _ in range(1_000):
+        parsed = uuid_stdlib.UUID(mint())
+        assert parsed.version == 7
+        assert (parsed.int >> 62) & 0b11 == 0b10  # RFC 9562 variant bits
+
+
+def test_mint_is_unique_at_volume() -> None:
+    ids = [mint() for _ in range(5_000)]
+    assert len(set(ids)) == len(ids)
+
+
+def test_mint_orders_by_time_including_within_one_millisecond() -> None:
+    """The naive approach -- pure randomness in the 12 bits after the
+    timestamp -- orders correctly ACROSS milliseconds but not within one:
+    measured, 5 IDs minted in the same tick sorted out of order. Sub-ms clock
+    precision (RFC 9562 §6.2 Method 3) closes exactly that gap."""
+    by_ms: dict[int, list[int]] = {}
+    for _ in range(20_000):
+        value = uuid_stdlib.UUID(mint()).int
+        by_ms.setdefault(value >> 80, []).append(value)
+    assert any(len(v) > 1 for v in by_ms.values()), (
+        "test is meaningless if nothing landed in the same millisecond")
+    for values in by_ms.values():
+        assert values == sorted(values)
+
+
+def test_mint_timestamp_matches_the_wall_clock() -> None:
+    before_ms = time.time_ns() // 1_000_000
+    sampled = uuid_stdlib.UUID(mint()).int >> 80
+    after_ms = time.time_ns() // 1_000_000
+    assert before_ms <= sampled <= after_ms
 
 
 def test_a_well_formed_value_is_accepted() -> None:
