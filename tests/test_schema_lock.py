@@ -151,7 +151,7 @@ def test_a_breaking_write_without_a_new_version_is_refused(ring: Path) -> None:
     before = lock.read_bytes()
     done = _run_write(ring)
     assert done.returncode == 1, done.stdout
-    assert "NEW --version" in done.stdout
+    assert "MAJOR --version" in done.stdout
     assert lock.read_bytes() == before, "the lock must stay untouched on refusal"
 
 
@@ -201,7 +201,8 @@ def test_serialisers_are_named_by_the_fields_they_rewrite() -> None:
 
     assert schema_lock._serializers(Plain) == []
     got = schema_lock._serializers(Rewritten)
-    assert any("field(x)" in g for g in got) and any(g.startswith("model:") for g in got), got
+    assert any("field_serializers(x)" in g for g in got), got
+    assert any(g.startswith("model_serializers:") for g in got), got
 
 
 def test_dropping_a_union_discriminator_blocks(ring: Path) -> None:
@@ -245,7 +246,7 @@ def test_deleting_the_lock_is_not_a_way_past_the_version_decision(ring: Path) ->
     (ring / "schema.lock.json").unlink()
     done = _run_write(ring, "--version", stored)
     assert done.returncode == 1, done.stdout
-    assert "NEW --version" in done.stdout, done.stdout
+    assert "MAJOR --version" in done.stdout, done.stdout
 
 
 def test_a_lock_rewritten_by_hand_against_history_blocks(ring: Path) -> None:
@@ -344,7 +345,11 @@ def test_a_lambda_default_factory_is_refused(ring: Path) -> None:
           "    versions: tuple[ContentVersion, ...] = Field(default_factory=lambda: ())")
     done = _run(ring)
     assert done.returncode == 1
-    assert "lambda" in done.stdout + done.stderr
+    # Measured: bare "lambda" passed even with this refusal disabled, because
+    # the factory's OWN name embeds "<lambda>" and shows up anyway once the
+    # change is merely reported as an ordinary breaking default change — the
+    # refusal's own wording is what must be present.
+    assert "defaults to a lambda" in done.stdout + done.stderr
 
 
 ANCHOR = "    extractor_version: int"

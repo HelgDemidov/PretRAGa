@@ -1,6 +1,8 @@
 """Kind obligations, checked where they are enforced: class creation."""
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 from pydantic import create_model
 
@@ -60,6 +62,21 @@ def test_a_value_may_not_unset_frozen_through_class_kwargs() -> None:
             h: ContentHash
 
 
+def test_an_underscore_name_does_not_exempt_the_frozen_obligation() -> None:
+    """A survey-level backstop re-checks every concept it finds regardless of
+    name, which makes this scenario safe end to end either way — but that
+    redundancy also means an integration test cannot tell whether THIS
+    specific edge-triggered check still refuses the exemption, or whether the
+    backstop alone is doing the work. Only a direct, in-process check of class
+    creation can."""
+    with pytest.raises(KindError, match="frozen"):
+
+        class _Loose(Value, frozen=False):
+            """A private-named value trying to dodge its kind via naming."""
+
+            payload: str
+
+
 def test_a_grandchild_may_not_unset_frozen() -> None:
     class Base(Value):
         """A value."""
@@ -86,6 +103,20 @@ def test_overriding_the_hook_does_not_bypass_it() -> None:
             @classmethod
             def __pydantic_init_subclass__(cls, **kwargs: object) -> None:
                 return None
+
+
+def test_an_entity_may_not_shadow_its_minted_identity() -> None:
+    """`uuid` is inherited from Entity itself, so no ordinary subclass omits
+    it — the obligation is reachable only by shadowing the inherited field
+    with a ClassVar of the same name, which un-declares it as a pydantic
+    field."""
+    with pytest.raises(KindError, match="minted identity"):
+
+        class NoIdentity(Entity):
+            """An entity that un-declares its inherited uuid field."""
+
+            uuid: ClassVar[str] = "shadowed"  # type: ignore[misc,assignment]
+            state: str = "x"
 
 
 def test_an_entity_may_not_be_frozen() -> None:

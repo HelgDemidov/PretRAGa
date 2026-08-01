@@ -129,6 +129,27 @@ def test_a_fabricated_anchor_is_caught() -> None:
     assert any("fabricated" in b for b in broken)
 
 
+def test_span_errors_are_distinguishable_by_the_full_anchor_key() -> None:
+    """The span-outside-text branch embeds no hash of its own besides the
+    claim identifier, unlike the others — so it is the one place a truncated
+    or dropped identifier is observable on its own. Two claims, equal-length
+    bodies, the identical invalid span, and a shared normalized prefix: only
+    the anchor's own key can still tell them apart."""
+    store = build(["AAAAAAAAAA", "BBBBBBBBBB"])
+    shared = "a shared normalized prefix identical for both claims here"
+    for i, claim in enumerate(store.claim_list):
+        store.claim_list[i] = Claim(
+            anchor=ProvenanceAnchor(version_key="en:1", text_hash=claim.anchor.text_hash,
+                                    span=CharSpan(start=0, end=99_999)),
+            normalized=shared, label=claim.label, extractor_version=1)
+    _, broken = report(store)
+    assert len(broken) == 2
+    assert broken[0] != broken[1], broken
+    keys = {c.content_hash for c in store.texts.values()}
+    named = {k for k in keys if any(k in line for line in broken)}
+    assert named == keys, (named, broken)
+
+
 def test_an_empty_corpus_reports_zero_records_rather_than_success() -> None:
     n, broken = report(MemoryStore())
     assert (n, broken) == (0, [])
