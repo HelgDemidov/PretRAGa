@@ -1,18 +1,28 @@
-# Evidence ci.yml's six checks can actually fail: plants a defect in each,
+# Evidence ci.yml's 6 checks can actually fail: plants a defect in each,
 # demands a red suite. Separate workflow, not a step in `gate` — a
-# different question (can checks still fail?) than the six ask (does code
+# different question (can checks still fail?) than the 6 ask (does code
 # violate a rule?) — with its own check-list entry.
 #
-# PR-only, costs several times the six steps; back on every push below two
-# minutes. `-n auto`: each mutation runs its own ring, so this is real
-# parallelism — measured 627s serial -> 252s on 4 cores, same result.
+# Runs on push+PR, docs-only changes excluded (nothing there is exercised
+# by any test). Threshold 180s on GitHub's runners specifically, not
+# local — measured 129s; revert to PR-only if it exceeds that.
+# `-n auto`: each mutation runs its own ring, real parallelism — measured
+# 627s serial -> 252s on 4 local cores, same result.
 # RED CONTROL INVALIDATES THE WHOLE RUN: inner suite stops at first
 # failure, so a broken ring reads every mutation as killed by that break.
 
 name: Mutation stand
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 permissions:
   contents: read
