@@ -12,7 +12,7 @@
           "factory": null,
           "required": true,
           "serialization_alias": null,
-          "type": "tuple[pretraga.domain.kinds.ContentHash, ...]",
+          "type": "tuple[Annotated[pretraga.domain.kinds.ContentHash, StringConstraints(pattern='^[0-9a-f]{64}$')], ...]",
           "validation_alias": null
         },
         "channel": {
@@ -1016,5 +1016,5 @@
       "serializers": []
     }
   },
-  "version": "3.0.0"
+  "version": "4.0.0"
 }

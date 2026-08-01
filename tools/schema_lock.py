@@ -37,7 +37,7 @@ import subprocess
 import sys
 import typing
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic.fields import FieldInfo
 
@@ -64,6 +64,21 @@ def _major(version: str) -> int | None:
     return int(head) if head.lstrip("-").isdigit() else None
 
 
+def _annotated_nodes(annotation: Any) -> list[Any]:
+    """Every `Annotated[X, *metadata]` reachable inside a parametrised
+    annotation. The only place one can appear: pydantic strips a field's OWN
+    outermost Annotated into `finfo.metadata` before `_type_name` ever sees
+    it, so a nested one — an element type inside `tuple[...]`, which `Field()`
+    cannot reach (`AcquisitionAct.brought`) — is the sole survivor, found by
+    walking `typing.get_args()`."""
+    found: list[Any] = []
+    if typing.get_origin(annotation) is Annotated:
+        found.append(annotation)
+    for arg in typing.get_args(annotation):
+        found.extend(_annotated_nodes(arg))
+    return found
+
+
 def _type_name(annotation: Any) -> str:
     """A stable, address-free, PARAMETER-PRESERVING name.
 
@@ -71,12 +86,21 @@ def _type_name(annotation: Any) -> str:
     "tuple", so naming generics by __name__ made a change of the parameter
     invisible — the exact class of silent corruption the lock exists to catch.
     Parametrised types therefore go through str(), which qualifies every
-    argument and embeds no memory address.
+    argument and embeds no memory address — except a nested `Annotated`,
+    whose metadata str() reprs whole, every None-valued field included, and
+    is spliced out for the already-adversarially-tested `_constraint_repr()`
+    instead, same as a top-level Field() constraint.
     """
     if annotation is None:
         return "None"
     if typing.get_origin(annotation) is not None:
-        return str(annotation).replace("typing.", "")
+        raw = str(annotation).replace("typing.", "")
+        for node in _annotated_nodes(annotation):
+            base, *metadata = typing.get_args(node)
+            clean = (f"Annotated[{_type_name(base)}, "
+                     f"{', '.join(_constraint_repr(m) for m in metadata)}]")
+            raw = raw.replace(str(node).replace("typing.", ""), clean)
+        return raw
     mod = getattr(annotation, "__module__", "")
     name = getattr(annotation, "__name__", None)
     if name and mod:

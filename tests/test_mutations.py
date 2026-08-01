@@ -171,7 +171,7 @@ MUTATIONS = [
     # --- schema lock ------------------------------------------------------
     Mutation("constraint repr records every field again", LOCK,
              "            if getattr(m, f.name) is not None]", "            if True]",
-             "tests/test_schema_lock.py::test_constraint_repr_omits_none_valued_fields"),
+             "tests/test_schema_lock.py::test_the_untouched_ring_is_green"),
     Mutation("callable constraint field reprs by address again", LOCK,
              'parts = (f"{k}={_factory_name(v)}" if callable(v) else f"{k}={v!r}" for k, v in kept)',
              'parts = (f"{k}={v!r}" for k, v in kept)',
@@ -193,6 +193,10 @@ MUTATIONS = [
              "tests/test_schema_lock.py::test_a_breaking_change_blocks"),
     Mutation("generic parameters collapsed again", LOCK,
              "    if typing.get_origin(annotation) is not None:", "    if False:",
+             "tests/test_schema_lock.py::test_the_untouched_ring_is_green"),
+    Mutation("nested annotated constraint reprs whole again", LOCK,
+             "    if typing.get_origin(annotation) is Annotated:\n        found.append(annotation)",
+             "    if False:\n        found.append(annotation)",
              "tests/test_schema_lock.py::test_the_untouched_ring_is_green"),
     Mutation("default change invisible", LOCK,
              '            elif a.get("default") != b.get("default") or a.get("factory") != '

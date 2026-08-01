@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
 from pretraga.domain.kinds import ContentHash, Entity, MintedId, Open, Trigger
 
@@ -37,7 +38,7 @@ class AcquisitionAct(Entity):
 
     channel: MintedId = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     occurred_at: str
-    brought: tuple[ContentHash, ...]
+    brought: tuple[Annotated[ContentHash, StringConstraints(pattern=r"^[0-9a-f]{64}$")], ...]
 
 
 class TriageVerdict(Entity):
