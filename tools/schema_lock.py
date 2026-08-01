@@ -99,6 +99,18 @@ def _factory_name(factory: Any) -> str:
     return f"{mod}.{qual}" if qual and mod else str(factory)
 
 
+def _constraint_repr(m: Any) -> str:
+    """Non-None dataclass fields only: a NEW field a future annotated-types
+    bump adds, defaulting to None, must not move this string — measured on
+    StringConstraints.ascii_only (added between 2.12 and 2.13, a bump already
+    in this repo's history)."""
+    if not dataclasses.is_dataclass(m) or isinstance(m, type):
+        return repr(m)
+    kept = [(f.name, getattr(m, f.name)) for f in dataclasses.fields(m)
+            if getattr(m, f.name) is not None]
+    return f"{type(m).__name__}({', '.join(f'{k}={v!r}' for k, v in kept)})"
+
+
 def _field_contract(finfo: FieldInfo) -> dict[str, Any]:
     factory = finfo.default_factory
     return {
@@ -110,7 +122,7 @@ def _field_contract(finfo: FieldInfo) -> dict[str, Any]:
         "factory": _factory_name(factory) if factory is not None else None,
         # Constraints travel with the field: tightening one rejects records
         # that used to load.
-        "constraints": sorted(repr(m) for m in (finfo.metadata or [])),
+        "constraints": sorted(_constraint_repr(m) for m in (finfo.metadata or [])),
         # THREE alias channels, not one. `alias` alone left two of them
         # unrecorded, and each is a persisted-data change: renaming the
         # validation alias makes yesterday's record fail to load (measured:

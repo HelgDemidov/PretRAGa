@@ -199,6 +199,40 @@ def test_history_lookups_are_absent_rather_than_wrong_outside_git(tmp_path: Path
     assert schema_lock._base_lock(tmp_path / "lock.json") is None
 
 
+def test_constraint_repr_omits_none_valued_fields() -> None:
+    """A field a future annotated-types bump adds, defaulting to None, must
+    not move the recorded string — measured: StringConstraints gained
+    ascii_only between pydantic 2.12 and 2.13."""
+    import dataclasses
+
+    @dataclasses.dataclass
+    class Constraint:
+        pattern: str | None = None
+        future_field: str | None = None
+
+    assert schema_lock._constraint_repr(Constraint(pattern="^x$")) == "Constraint(pattern='^x$')"
+
+
+def test_constraint_repr_still_records_a_set_field() -> None:
+    import dataclasses
+
+    @dataclasses.dataclass
+    class Constraint:
+        pattern: str | None = None
+        future_field: str | None = None
+
+    got = schema_lock._constraint_repr(Constraint(pattern="^x$", future_field="y"))
+    assert "future_field='y'" in got
+
+
+def test_constraint_repr_falls_back_to_repr_for_non_dataclasses() -> None:
+    class NotADataclass:
+        def __repr__(self) -> str:
+            return "NotADataclass()"
+
+    assert schema_lock._constraint_repr(NotADataclass()) == "NotADataclass()"
+
+
 def test_serialisers_are_named_by_the_fields_they_rewrite() -> None:
     from pydantic import BaseModel, field_serializer, model_serializer
 
