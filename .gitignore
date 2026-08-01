@@ -13,19 +13,25 @@
 !/docs/core/
 !/docs/design_truth/
 !/docs/backlog/
-/.claude/
+/.claude/*
+!/.claude/commands/
 /.serena/
 
 # Local environment, not portable — recreate, do not copy.
 .venv/
 
-# Tool and test caches.
+# Tool and test caches. Listed here even when the tool writes its own
+# self-ignoring file inside the directory (Grimp does, for the import-linter
+# cache): that file is the tool's convenience, not our contract — it vanishes
+# with the next clean or the next release, and the hole is invisible until it
+# is not.
 __pycache__/
 *.py[cod]
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .hypothesis/
+.import_linter_cache/
 .coverage
 .coverage.*
 htmlcov/
