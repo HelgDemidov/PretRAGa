@@ -44,7 +44,7 @@ same method names are indistinguishable by shape, so a structural count reports
 a port as implemented when it is not. That question is answered by the
 conformance suite, where the pairing is explicit and executable.
 
-Dynamic-import escapes (__import__/eval/exec) are refused in domain, usecases
+Dynamic-import escapes (__import__/eval/exec/compile) are refused in domain, usecases
 and adapters — the SAME modules whose importlib use the ring contract forbids,
 so the two mechanisms draw one boundary, not two. The composition root may
 compose dynamically; it already knows every concretion.
