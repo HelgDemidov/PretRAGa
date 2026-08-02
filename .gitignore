@@ -8,13 +8,13 @@
 # the open-work register: an unversioned backlog is one nobody sees and nobody
 # updates. Contents are excluded first, then the subtrees are re-included (a
 # directory cannot be re-included if the directory itself is excluded).
-/CLAUDE.md
 /docs/*
 !/docs/core/
 !/docs/design_truth/
 !/docs/backlog/
 /.claude/*
 !/.claude/commands/
+!/.claude/hooks/
 /.serena/
 
 # Local environment, not portable — recreate, do not copy.
