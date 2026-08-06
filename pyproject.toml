@@ -23,7 +23,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy==2.3.0",
-    "ruff==0.16.0",
+    "ruff==0.16.1",
     "pip-audit==2.10.1",              # CVE audit of dependencies
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
