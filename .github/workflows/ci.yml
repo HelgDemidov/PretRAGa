@@ -38,7 +38,7 @@ jobs:
 
       # Pinned to an exact version: setup-uv no longer publishes moving major
       # tags, and dependabot bumps this line.
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
