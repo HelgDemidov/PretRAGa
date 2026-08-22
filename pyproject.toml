@@ -17,7 +17,7 @@ dependencies = [
     "networkx==3.6.1",       # heterogeneous knowledge graph
     "tokenizers==0.23.1",    # bge-m3 tokenizer for canonical chunking
     "numpy==2.5.1",          # vector operations
-    "onnxruntime==1.27.0",   # bge-m3 int8 ONNX inference, CPU
+    "onnxruntime==1.29.0",   # bge-m3 int8 ONNX inference, CPU
 ]
 
 [dependency-groups]
