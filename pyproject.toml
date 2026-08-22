@@ -5,7 +5,7 @@ description = "Document acquisition, conversion, and retrieval-augmented generat
 requires-python = ">=3.12"
 dependencies = [
     "pdfplumber==0.11.10",   # PDF -> Markdown
-    "trafilatura==2.1.0",    # HTML -> Markdown (main-content extraction)
+    "trafilatura==2.2.0",    # HTML -> Markdown (main-content extraction)
     "mammoth==1.12.0",       # DOCX -> HTML, with a custom image handler
     "markdownify==1.2.3",    # HTML -> Markdown (subclassed for the DOCX path)
     "lxml==6.1.1",           # promote ELI markup to real <hN> before trafilatura
