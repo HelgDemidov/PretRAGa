@@ -16,7 +16,7 @@ dependencies = [
     "PyYAML==6.0.3",         # read/write records and controlled vocabularies
     "networkx==3.6.1",       # heterogeneous knowledge graph
     "tokenizers==0.23.1",    # bge-m3 tokenizer for canonical chunking
-    "numpy==2.5.1",          # vector operations
+    "numpy==2.5.2",          # vector operations
     "onnxruntime==1.29.0",   # bge-m3 int8 ONNX inference, CPU
 ]
 
