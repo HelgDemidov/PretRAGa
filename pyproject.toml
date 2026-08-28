@@ -29,7 +29,7 @@ dev = [
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",             # parallelises the mutation stand's outer loop (-m heavy -n auto)
     "types-PyYAML==6.0.12.20260518",
-    "types-openpyxl==3.1.5.20260724",
+    "types-openpyxl==3.1.5.20260807",
     "reportlab==5.0.0",                # synthetic PDF fixtures for converter tests
     "types-reportlab==4.5.1.20260724",
     "hypothesis==6.165.0",             # property-based testing
