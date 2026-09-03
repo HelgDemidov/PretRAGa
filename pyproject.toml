@@ -11,7 +11,7 @@ dependencies = [
     "lxml==6.1.1",           # promote ELI markup to real <hN> before trafilatura
     "openpyxl==3.1.5",       # XLSX -> Markdown, plus embedded-chart parts
     "duckdb==1.5.5",         # bronze layer for raw registry-connector payloads
-    "mermaidx==0.9.4",       # render-validate mermaid output with real mermaid.js
+    "mermaidx==0.9.5",       # render-validate mermaid output with real mermaid.js
     "pydantic==2.13.4",      # curated-record schema
     "PyYAML==6.0.3",         # read/write records and controlled vocabularies
     "networkx==3.6.1",       # heterogeneous knowledge graph
