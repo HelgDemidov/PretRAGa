@@ -8,7 +8,7 @@ dependencies = [
     "trafilatura==2.2.0",    # HTML -> Markdown (main-content extraction)
     "mammoth==1.12.1",       # DOCX -> HTML, with a custom image handler
     "markdownify==1.2.3",    # HTML -> Markdown (subclassed for the DOCX path)
-    "lxml==6.1.1",           # promote ELI markup to real <hN> before trafilatura
+    "lxml==6.1.3",           # promote ELI markup to real <hN> before trafilatura
     "openpyxl==3.1.5",       # XLSX -> Markdown, plus embedded-chart parts
     "duckdb==1.5.5",         # bronze layer for raw registry-connector payloads
     "mermaidx==0.9.5",       # render-validate mermaid output with real mermaid.js
