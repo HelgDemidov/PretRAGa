@@ -23,19 +23,19 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy==2.3.1",
-    "ruff==0.16.4",
+    "ruff==0.16.9",
     "pip-audit==2.10.1",              # CVE audit of dependencies
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",             # parallelises the mutation stand's outer loop (-m heavy -n auto)
     "types-PyYAML==6.0.12.20260518",
-    "types-openpyxl==3.1.5.20260807",
+    "types-openpyxl==3.1.5.20260827",
     "reportlab==5.0.1",                # synthetic PDF fixtures for converter tests
     "types-reportlab==5.0.0.20260911",
-    "hypothesis==6.168.0",             # property-based testing
+    "hypothesis==6.168.3",             # property-based testing
     "erdantic==1.2.1",                 # ER diagrams generated directly from pydantic/dataclass models
     "import-linter==2.14",             # enforce import-boundary contracts between layers
-    "grimp==3.15",                     # import graph backing import-linter
+    "grimp==3.17",                     # import graph backing import-linter
     "pydeps==3.0.8",                   # visual import graph; needs the system `graphviz` package (`dot`) installed separately
     "types-networkx==3.6.1.20260911",
 ]
