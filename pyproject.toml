@@ -14,7 +14,7 @@ dependencies = [
     "mermaidx==0.9.5",       # render-validate mermaid output with real mermaid.js
     "pydantic==2.13.5",      # curated-record schema
     "PyYAML==6.0.3",         # read/write records and controlled vocabularies
-    "networkx==3.6.1",       # heterogeneous knowledge graph
+    "networkx==3.7",       # heterogeneous knowledge graph
     "tokenizers==0.23.2",    # bge-m3 tokenizer for canonical chunking
     "numpy==2.5.3",          # vector operations
     "onnxruntime==1.30.0",   # bge-m3 int8 ONNX inference, CPU
